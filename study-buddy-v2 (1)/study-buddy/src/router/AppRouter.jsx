@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const LandingPage = lazy(() => import('../views/public/LandingPage'));
@@ -60,7 +60,7 @@ const AuthRoute = ({ children }) => {
 
 export default function AppRouter() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Suspense fallback={<Spinner />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
@@ -91,6 +91,6 @@ export default function AppRouter() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
