@@ -24,6 +24,9 @@ const MatchesPage = lazy(() => import('../views/app/MatchesPage'));
 const SessionsPage = lazy(() => import('../views/app/SessionsPage'));
 const ProgressPage = lazy(() => import('../views/app/ProgressPage'));
 const SurveyPage = lazy(() => import('../views/app/SurveyPage'));
+const StudyRequestPage = lazy(() => import('../views/app/StudyRequestPage'));
+const ChatsListPage = lazy(() => import('../views/app/ChatsListPage'));
+const ChatPage = lazy(() => import('../views/app/ChatPage'));
 const NotFoundPage = lazy(() => import('../views/system/NotFoundPage'));
 
 const Spinner = () => (
@@ -37,13 +40,8 @@ const ProtectedRoute = ({ children, requireOnboarding = true }) => {
   const { currentUser, isOnboardingComplete, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!currentUser) return <Navigate to="/giris" replace />;
-
-  // Mail doğrulama kontrolü
   if (!currentUser.emailVerified) return <Navigate to="/email-dogrula" replace />;
-
-  // Onboarding kontrolü
   if (requireOnboarding && !isOnboardingComplete) return <Navigate to="/onboarding" replace />;
-
   return children;
 };
 
@@ -79,10 +77,11 @@ export default function AppRouter() {
           <Route path="/sifremi-unuttum" element={<ForgotPasswordPage />} />
           <Route path="/sifre-sifirla" element={<ResetPasswordPage />} />
 
-          <Route path="/onboarding" element={
-            <ProtectedRoute requireOnboarding={false}><OnboardingPage /></ProtectedRoute>
-          } />
+          <Route path="/onboarding" element={<ProtectedRoute requireOnboarding={false}><OnboardingPage /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/istekler" element={<ProtectedRoute><StudyRequestPage /></ProtectedRoute>} />
+          <Route path="/sohbetler" element={<ProtectedRoute><ChatsListPage /></ProtectedRoute>} />
+          <Route path="/sohbet/:chatId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
           <Route path="/eslesmeler" element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
           <Route path="/oturumlar" element={<ProtectedRoute><SessionsPage /></ProtectedRoute>} />
           <Route path="/ilerleme" element={<ProtectedRoute><ProgressPage /></ProtectedRoute>} />
