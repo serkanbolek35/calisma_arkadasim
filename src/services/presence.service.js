@@ -1,36 +1,58 @@
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
-// Kullanıcı aktif olduğunda lastSeen güncelle
-export const updatePresence = async (uid) => {
-  try {
-    await updateDoc(doc(db, 'users', uid), {
-      lastSeen: serverTimestamp(),
-      isOnline: true,
-    });
-  } catch (e) { console.error('Presence error:', e); }
+// ~500m-1km rastgele sapma — tam konum gizlenir
+export const fuzzLocation = (lat, lng) => {
+  const r = 0.004 + Math.random() * 0.004;
+  const angle = Math.random() * 2 * Math.PI;
+  return {
+    lat: +(lat + r * Math.cos(angle)).toFixed(5),
+    lng: +(lng + r * Math.sin(angle)).toFixed(5),
+  };
 };
 
-// Kullanıcı çıkış yapınca veya pencere kapanınca offline yap
+// GPS alıp fuzzlanmış konumu Firestore'a yaz
+export const updatePresence = (uid) => {
+  return new Promise((resolve) => {
+    const writePresence = async (fuzzedLat = null, fuzzedLng = null) => {
+      try {
+        const data = {
+          lastSeen: serverTimestamp(),
+          isOnline: true,
+        };
+        if (fuzzedLat && fuzzedLng) {
+          data.activeLat = fuzzedLat;
+          data.activeLng = fuzzedLng;
+        }
+        await updateDoc(doc(db, 'users', uid), data);
+      } catch (e) { console.error('Presence error:', e); }
+      resolve();
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { lat, lng } = fuzzLocation(pos.coords.latitude, pos.coords.longitude);
+          writePresence(lat, lng);
+        },
+        () => writePresence(), // izin yoksa sadece lastSeen yaz
+        { timeout: 5000, maximumAge: 60000 }
+      );
+    } else {
+      writePresence();
+    }
+  });
+};
+
 export const setOffline = async (uid) => {
   try {
     await updateDoc(doc(db, 'users', uid), { isOnline: false });
   } catch (_) {}
 };
 
-// 30 dakika içinde aktif mi?
+// Son 30 dakikada aktif mi?
 export const isRecentlyActive = (lastSeen) => {
   if (!lastSeen) return false;
   const d = lastSeen.toDate?.() ?? new Date(lastSeen);
-  return Date.now() - d.getTime() < 30 * 60 * 1000; // 30 dakika
-};
-
-// Kampüs merkezi etrafında ~500m-1km rastgele sapma (gizlilik)
-export const fuzzLocation = (lat, lng) => {
-  const r = 0.004 + Math.random() * 0.004; // ~450m-900m
-  const angle = Math.random() * 2 * Math.PI;
-  return {
-    lat: lat + r * Math.cos(angle),
-    lng: lng + r * Math.sin(angle),
-  };
+  return Date.now() - d.getTime() < 30 * 60 * 1000;
 };

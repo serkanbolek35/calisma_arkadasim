@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { createNotification } from './notification.service';
-import { isRecentlyActive, fuzzLocation } from './presence.service';
+import { isRecentlyActive } from './presence.service';
 
 export const getMatches = async (userId) => {
   try {
@@ -43,7 +43,9 @@ export const respondToMatch = async (matchId, accept, responderId = '', responde
     await createNotification(matchData.initiatedBy, {
       type: accept ? 'match_accepted' : 'match_rejected',
       title: accept ? '✅ Eşleşme Kabul Edildi' : '❌ Eşleşme Reddedildi',
-      body: accept ? `${responderName || 'Kullanıcı'} eşleşme isteğini kabul etti!` : `${responderName || 'Kullanıcı'} eşleşme isteğini reddetti.`,
+      body: accept
+        ? `${responderName || 'Kullanıcı'} eşleşme isteğini kabul etti!`
+        : `${responderName || 'Kullanıcı'} eşleşme isteğini reddetti.`,
       link: '/eslesmeler',
       fromUserId: responderId, fromName: responderName,
     });
@@ -55,6 +57,9 @@ export const endMatch = async (matchId) => {
 };
 
 const extractCoords = (data, prefData = null) => {
+  // 1. Aktif GPS konumu (fuzzlanmış, güncel)
+  if (data.activeLat && data.activeLng) return { lat: data.activeLat, lng: data.activeLng, name: data.campusName || '' };
+  // 2. Kayıtlı kampüs konumu
   if (data.campusLat && data.campusLng) return { lat: data.campusLat, lng: data.campusLng, name: data.campusName || '' };
   if (data.preferences?.campusLat) return { lat: data.preferences.campusLat, lng: data.preferences.campusLng, name: data.preferences.campus || '' };
   if (prefData?.campusLat) return { lat: prefData.campusLat, lng: prefData.campusLng, name: prefData.campus || '' };
@@ -70,10 +75,9 @@ export const findPotentialMatches = async (userId, mySubjects = []) => {
       if (userDoc.id === userId) continue;
       const data = userDoc.data();
 
-      // ── Sadece aktif kullanıcıları göster (son 30 dakika) ──
+      // Sadece son 30 dakikada aktif olanlar
       if (!isRecentlyActive(data.lastSeen)) continue;
 
-      // Alt koleksiyondan preferences dene
       let prefData = null;
       try {
         const prefSnap = await getDoc(doc(db, 'users', userDoc.id, 'preferences', userDoc.id));
@@ -90,21 +94,12 @@ export const findPotentialMatches = async (userId, mySubjects = []) => {
         score = Math.round((common.length / Math.max(mySubjects.length, theirSubjects.length, 1)) * 100);
       }
 
-      const { lat: rawLat, lng: rawLng, name: campusName } = extractCoords(data, prefData);
-
-      // ── Tam konum yerine yaklaşık konum göster (~500m-1km sapma) ──
-      let campusLat = null, campusLng = null;
-      if (rawLat && rawLng) {
-        const fuzzy = fuzzLocation(rawLat, rawLng);
-        campusLat = fuzzy.lat;
-        campusLng = fuzzy.lng;
-      }
+      const { lat: campusLat, lng: campusLng, name: campusName } = extractCoords(data, prefData);
 
       results.push({
         uid: userDoc.id,
         displayName: data.displayName || 'Kullanıcı',
-        email: data.email || '',
-        campusLat,
+        campusLat,   // zaten fuzzlanmış veya kampüs merkezi
         campusLng,
         campusName: campusName || data.campusName || '',
         faculty: data.faculty || '',

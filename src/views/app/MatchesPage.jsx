@@ -85,13 +85,8 @@ const MatchMap = ({ lat, lng, potentials, onSelectUser }) => {
         className: '', iconAnchor: [19, 19],
       });
 
-      const marker = L.marker([jLat, jLng], { icon }).addTo(map)
-        .bindPopup(`<div style="min-width:140px;padding:2px">
-          <b style="font-size:13px;color:#111">${user.displayName}</b><br/>
-          <span style="font-size:11px;color:#555">%${score} uyum</span><br/>
-          <span style="font-size:11px;color:#777">📍 ${user.campusName || ''}</span><br/>
-          <span style="font-size:11px;color:#777">${(user.commonSubjects || []).slice(0,2).join(', ')}</span>
-        </div>`);
+      // Popup yok — tıklayınca direkt modal açılır
+      const marker = L.marker([jLat, jLng], { icon }).addTo(map);
       marker.on('click', () => onSelectUser(user));
       potMarkersRef.current.push(marker);
     });
