@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { createNotification } from './notification.service';
+import { isRecentlyActive, fuzzLocation } from './presence.service';
 
 export const getMatches = async (userId) => {
   try {
@@ -28,8 +29,7 @@ export const sendMatchRequest = async (fromUserId, toUserId, commonSubjects = []
     title: '🤝 Yeni Eşleşme İsteği',
     body: `${fromName || 'Bir kullanıcı'} sana eşleşme isteği gönderdi.`,
     link: '/eslesmeler',
-    fromUserId,
-    fromName,
+    fromUserId, fromName,
   });
   return ref.id;
 };
@@ -45,8 +45,7 @@ export const respondToMatch = async (matchId, accept, responderId = '', responde
       title: accept ? '✅ Eşleşme Kabul Edildi' : '❌ Eşleşme Reddedildi',
       body: accept ? `${responderName || 'Kullanıcı'} eşleşme isteğini kabul etti!` : `${responderName || 'Kullanıcı'} eşleşme isteğini reddetti.`,
       link: '/eslesmeler',
-      fromUserId: responderId,
-      fromName: responderName,
+      fromUserId: responderId, fromName: responderName,
     });
   }
 };
@@ -55,14 +54,10 @@ export const endMatch = async (matchId) => {
   await updateDoc(doc(db, 'matches', matchId), { status: 'ended', endedAt: serverTimestamp() });
 };
 
-// Koordinat okuma yardımcı fonksiyonu - her ihtimali dene
 const extractCoords = (data, prefData = null) => {
-  // 1. Ana dokümanda doğrudan
-  if (data.campusLat && data.campusLng) return { lat: data.campusLat, lng: data.campusLng, name: data.campusName || data.campus || '' };
-  // 2. Ana dokümanda preferences objesi içinde
-  if (data.preferences?.campusLat) return { lat: data.preferences.campusLat, lng: data.preferences.campusLng, name: data.preferences.campus || data.preferences.campusName || '' };
-  // 3. Alt koleksiyondan gelen veri
-  if (prefData?.campusLat) return { lat: prefData.campusLat, lng: prefData.campusLng, name: prefData.campus || prefData.campusName || '' };
+  if (data.campusLat && data.campusLng) return { lat: data.campusLat, lng: data.campusLng, name: data.campusName || '' };
+  if (data.preferences?.campusLat) return { lat: data.preferences.campusLat, lng: data.preferences.campusLng, name: data.preferences.campus || '' };
+  if (prefData?.campusLat) return { lat: prefData.campusLat, lng: prefData.campusLng, name: prefData.campus || '' };
   return { lat: null, lng: null, name: '' };
 };
 
@@ -75,7 +70,10 @@ export const findPotentialMatches = async (userId, mySubjects = []) => {
       if (userDoc.id === userId) continue;
       const data = userDoc.data();
 
-      // Alt koleksiyondan da preferences'ı çekmeyi dene
+      // ── Sadece aktif kullanıcıları göster (son 30 dakika) ──
+      if (!isRecentlyActive(data.lastSeen)) continue;
+
+      // Alt koleksiyondan preferences dene
       let prefData = null;
       try {
         const prefSnap = await getDoc(doc(db, 'users', userDoc.id, 'preferences', userDoc.id));
@@ -88,11 +86,19 @@ export const findPotentialMatches = async (userId, mySubjects = []) => {
       let score = 50;
       if (mySubjects.length > 0 && theirSubjects.length > 0) {
         common = mySubjects.filter(s => theirSubjects.includes(s));
-        if (common.length === 0 && mySubjects.length > 0) continue;
+        if (common.length === 0) continue;
         score = Math.round((common.length / Math.max(mySubjects.length, theirSubjects.length, 1)) * 100);
       }
 
-      const { lat: campusLat, lng: campusLng, name: campusName } = extractCoords(data, prefData);
+      const { lat: rawLat, lng: rawLng, name: campusName } = extractCoords(data, prefData);
+
+      // ── Tam konum yerine yaklaşık konum göster (~500m-1km sapma) ──
+      let campusLat = null, campusLng = null;
+      if (rawLat && rawLng) {
+        const fuzzy = fuzzLocation(rawLat, rawLng);
+        campusLat = fuzzy.lat;
+        campusLng = fuzzy.lng;
+      }
 
       results.push({
         uid: userDoc.id,
@@ -105,6 +111,7 @@ export const findPotentialMatches = async (userId, mySubjects = []) => {
         subjects: theirSubjects,
         commonSubjects: common,
         compatibilityScore: score,
+        isOnline: data.isOnline || false,
       });
     }
 

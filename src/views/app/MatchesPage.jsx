@@ -63,20 +63,24 @@ const MatchMap = ({ lat, lng, potentials, onSelectUser }) => {
       const uLat = user.campusLat; const uLng = user.campusLng;
       if (!uLat || !uLng) return;
 
-      // Küçük jitter - aynı noktada üst üste gelmesin
-      const jLat = uLat + (Math.random() - 0.5) * 0.003;
-      const jLng = uLng + (Math.random() - 0.5) * 0.003;
+      // Koordinat zaten presence.service'de fuzzy yapıldı, küçük ek jitter sadece üst üste gelmesin
+      const jLat = uLat + (Math.random() - 0.5) * 0.001;
+      const jLng = uLng + (Math.random() - 0.5) * 0.001;
 
       const score = user.compatibilityScore || 0;
       const color = score >= 70 ? '#E8A020' : '#7A9E7A';
+      const onlineDot = user.isOnline
+        ? `<div style="position:absolute;bottom:1px;right:1px;width:10px;height:10px;border-radius:50%;background:#5ABF8A;border:2px solid #0D0D0D"></div>`
+        : '';
       const icon = L.divIcon({
         html: `<div style="
           width:38px;height:38px;border-radius:50%;
           background:${color}20;border:2.5px solid ${color};
           display:flex;align-items:center;justify-content:center;
           cursor:pointer;font-weight:700;font-size:15px;color:${color};
-          box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+          box-shadow:0 2px 8px rgba(0,0,0,0.4);position:relative">
           ${user.displayName?.charAt(0)?.toUpperCase() || '?'}
+          ${onlineDot}
         </div>`,
         className: '', iconAnchor: [19, 19],
       });
