@@ -26,6 +26,7 @@ const StudyRequestPage = lazy(() => import('../views/app/StudyRequestPage'));
 const ChatsListPage = lazy(() => import('../views/app/ChatsListPage'));
 const ChatPage = lazy(() => import('../views/app/ChatPage'));
 const ProfilePage = lazy(() => import('../views/app/ProfilePage'));
+const NotificationsPage = lazy(() => import('../views/app/NotificationsPage'));
 const NotFoundPage = lazy(() => import('../views/system/NotFoundPage'));
 
 const Spinner = () => (
@@ -84,6 +85,7 @@ export default function AppRouter() {
           <Route path="/ilerleme" element={<ProtectedRoute><ProgressPage /></ProtectedRoute>} />
           <Route path="/anket" element={<ProtectedRoute><SurveyPage /></ProtectedRoute>} />
           <Route path="/profil" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="/bildirimler" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
           <Route path="/profil/:uid" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

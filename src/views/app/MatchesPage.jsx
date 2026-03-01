@@ -4,16 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import { useAuth } from '../../context/AuthContext';
 import { getMatches, sendMatchRequest, respondToMatch, endMatch, findPotentialMatches } from '../../services/matching.service';
-import { getUserPreferences } from '../../services/user.service';
+import { getUser } from '../../services/user.service';
 import { MARMARA_KAMPUSLER } from '../../data/marmara';
 
-// ── Harita ────────────────────────────────────────────────────
+// ── Leaflet harita — lat/lng prop'u değişince marker güncellenir ──
 const MatchMap = ({ lat, lng, potentials, onSelectUser }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const selfMarkerRef = useRef(null);
-  const potentialMarkersRef = useRef([]);
+  const potMarkersRef = useRef([]);
 
+  // Haritayı bir kez başlat
   useEffect(() => {
     if (!window.L || mapInstanceRef.current) return;
     const L = window.L;
@@ -21,69 +22,83 @@ const MatchMap = ({ lat, lng, potentials, onSelectUser }) => {
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19,
     }).addTo(map);
-    mapInstanceRef.current = map;
+
     MARMARA_KAMPUSLER.forEach(k => {
       const icon = L.divIcon({
-        html: `<div style="width:11px;height:11px;border-radius:50%;background:rgba(90,122,90,0.8);border:2px solid #5A7A5A"></div>`,
+        html: `<div style="width:10px;height:10px;border-radius:50%;background:rgba(90,122,90,0.7);border:2px solid #5A7A5A"></div>`,
         className: '', iconAnchor: [5, 5],
       });
-      L.marker([k.lat, k.lng], { icon }).addTo(map)
-        .bindPopup(`<span style="font-size:12px;color:#0D0D0D">🏫 ${k.ad}</span>`);
+      L.marker([k.lat, k.lng], { icon }).addTo(map).bindPopup(`🏫 ${k.ad}`);
     });
+
+    mapInstanceRef.current = map;
     return () => { map.remove(); mapInstanceRef.current = null; };
   }, []);
 
+  // Kendi konumu değişince marker güncelle
   useEffect(() => {
     const L = window.L; const map = mapInstanceRef.current;
     if (!L || !map || !lat || !lng) return;
-    if (selfMarkerRef.current) { selfMarkerRef.current.remove(); selfMarkerRef.current = null; }
+
+    if (selfMarkerRef.current) { selfMarkerRef.current.remove(); }
+
     const icon = L.divIcon({
-      html: `<div style="width:20px;height:20px;border-radius:50%;background:#E8A020;border:3px solid white;box-shadow:0 0 0 4px rgba(232,160,32,0.3),0 0 16px rgba(232,160,32,0.6)"></div>`,
+      html: `<div style="width:20px;height:20px;border-radius:50%;background:#E8A020;border:3px solid white;box-shadow:0 0 0 5px rgba(232,160,32,0.25),0 0 20px rgba(232,160,32,0.5)"></div>`,
       className: '', iconAnchor: [10, 10],
     });
-    selfMarkerRef.current = L.marker([lat, lng], { icon }).addTo(map)
-      .bindPopup('<b style="color:#0D0D0D">📍 Senin Konumun</b>');
+    selfMarkerRef.current = L.marker([lat, lng], { icon, zIndexOffset: 1000 })
+      .addTo(map).bindPopup('<b>📍 Senin Konumun</b>');
     map.setView([lat, lng], 13);
   }, [lat, lng]);
 
+  // Potansiyel kullanıcılar değişince markerleri güncelle
   useEffect(() => {
     const L = window.L; const map = mapInstanceRef.current;
     if (!L || !map) return;
-    potentialMarkersRef.current.forEach(m => m.remove());
-    potentialMarkersRef.current = [];
+
+    potMarkersRef.current.forEach(m => m.remove());
+    potMarkersRef.current = [];
+
     potentials.forEach(user => {
       const uLat = user.campusLat; const uLng = user.campusLng;
       if (!uLat || !uLng) return;
-      const jLat = uLat + (Math.random() - 0.5) * 0.002;
-      const jLng = uLng + (Math.random() - 0.5) * 0.002;
+
+      // Küçük jitter - aynı noktada üst üste gelmesin
+      const jLat = uLat + (Math.random() - 0.5) * 0.003;
+      const jLng = uLng + (Math.random() - 0.5) * 0.003;
+
       const score = user.compatibilityScore || 0;
-      const color = score >= 70 ? '#E8A020' : score >= 40 ? '#7A9E7A' : '#8A9AAA';
+      const color = score >= 70 ? '#E8A020' : '#7A9E7A';
       const icon = L.divIcon({
-        html: `<div style="width:36px;height:36px;border-radius:50%;background:${color}22;border:2px solid ${color};display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:bold;font-size:14px;color:${color}">
+        html: `<div style="
+          width:38px;height:38px;border-radius:50%;
+          background:${color}20;border:2.5px solid ${color};
+          display:flex;align-items:center;justify-content:center;
+          cursor:pointer;font-weight:700;font-size:15px;color:${color};
+          box-shadow:0 2px 8px rgba(0,0,0,0.4)">
           ${user.displayName?.charAt(0)?.toUpperCase() || '?'}
         </div>`,
-        className: '', iconAnchor: [18, 18],
+        className: '', iconAnchor: [19, 19],
       });
+
       const marker = L.marker([jLat, jLng], { icon }).addTo(map)
-        .bindPopup(`<div style="min-width:160px;padding:4px">
-          <b style="font-size:13px">${user.displayName || 'Kullanıcı'}</b><br/>
-          <span style="font-size:11px;color:#666">%${score} uyum</span><br/>
-          <span style="font-size:11px;color:#444">${(user.commonSubjects||[]).slice(0,2).join(', ')}</span><br/>
-          <span style="font-size:11px;color:#888">📍 ${user.campusName||''}</span>
+        .bindPopup(`<div style="min-width:140px;padding:2px">
+          <b style="font-size:13px;color:#111">${user.displayName}</b><br/>
+          <span style="font-size:11px;color:#555">%${score} uyum</span><br/>
+          <span style="font-size:11px;color:#777">📍 ${user.campusName || ''}</span><br/>
+          <span style="font-size:11px;color:#777">${(user.commonSubjects || []).slice(0,2).join(', ')}</span>
         </div>`);
       marker.on('click', () => onSelectUser(user));
-      potentialMarkersRef.current.push(marker);
+      potMarkersRef.current.push(marker);
     });
   }, [potentials]);
 
-  return (
-    <div ref={mapRef} style={{ width: '100%', height: '100%', borderRadius: '16px', overflow: 'hidden' }} />
-  );
+  return <div ref={mapRef} style={{ width: '100%', height: '100%', borderRadius: '16px', overflow: 'hidden' }} />;
 };
 
 // ── Ana Sayfa ─────────────────────────────────────────────────
 export default function MatchesPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, userDoc } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState('map');
   const [matches, setMatches] = useState([]);
@@ -94,56 +109,98 @@ export default function MatchesPage() {
   const [userLat, setUserLat] = useState(null);
   const [userLng, setUserLng] = useState(null);
   const [locationStatus, setLocationStatus] = useState('loading');
+  const [matchPartnerNames, setMatchPartnerNames] = useState({});
 
   const loadData = async () => {
     if (!currentUser) return;
     try {
-      const [m, prefs] = await Promise.all([getMatches(currentUser.uid), getUserPreferences(currentUser.uid)]);
+      // Önce kullanıcı doc'undan kampüs koordinatını al (hızlı)
+      const savedLat = userDoc?.campusLat || userDoc?.preferences?.campusLat;
+      const savedLng = userDoc?.campusLng || userDoc?.preferences?.campusLng;
+      if (savedLat && savedLng && !userLat) {
+        setUserLat(savedLat);
+        setUserLng(savedLng);
+      }
+
+      const mySubjects = userDoc?.subjects || userDoc?.preferences?.subjects || [];
+      const [m, all] = await Promise.all([
+        getMatches(currentUser.uid),
+        findPotentialMatches(currentUser.uid, mySubjects),
+      ]);
       setMatches(m);
-      if (!userLat && prefs?.campusLat) { setUserLat(prefs.campusLat); setUserLng(prefs.campusLng); if (locationStatus === 'denied') setLocationStatus('ok'); }
+
       const sentOrActiveIds = m.map(x => x.users?.find(id => id !== currentUser.uid)).filter(Boolean);
-      const all = await findPotentialMatches(currentUser.uid, prefs?.subjects || []);
       setPotentials(all.filter(u => !sentOrActiveIds.includes(u.uid)));
+
+      // Eşleşme partner isimlerini yükle
+      const names = {};
+      for (const match of m) {
+        const pid = match.users?.find(id => id !== currentUser.uid);
+        if (pid && !names[pid]) {
+          const p = await getUser(pid);
+          if (p) names[pid] = p.displayName || 'Kullanıcı';
+        }
+      }
+      setMatchPartnerNames(names);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
   useEffect(() => {
+    loadData();
+    // GPS konumunu al
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        pos => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); setLocationStatus('ok'); },
-        () => setLocationStatus('denied'), { timeout: 8000 }
+        pos => {
+          setUserLat(pos.coords.latitude);
+          setUserLng(pos.coords.longitude);
+          setLocationStatus('ok');
+        },
+        () => setLocationStatus('denied'),
+        { timeout: 8000, enableHighAccuracy: true }
       );
-    } else { setLocationStatus('denied'); }
-    loadData();
+    } else {
+      setLocationStatus('denied');
+    }
   }, [currentUser]);
 
   const handleSendRequest = async (toUser) => {
     setSending(true);
     try {
-      await sendMatchRequest(currentUser.uid, toUser.uid, toUser.commonSubjects || [], toUser.compatibilityScore || 0);
+      const fromName = userDoc?.displayName || currentUser?.email?.split('@')[0] || 'Kullanıcı';
+      await sendMatchRequest(currentUser.uid, toUser.uid, toUser.commonSubjects || [], toUser.compatibilityScore || 0, fromName);
       setSelectedUser(null);
       await loadData();
-    } catch (e) { console.error(e); } finally { setSending(false); }
+    } catch (e) { console.error(e); }
+    finally { setSending(false); }
   };
 
-  const handleRespond = async (matchId, accept) => { await respondToMatch(matchId, accept); await loadData(); };
+  const handleRespond = async (matchId, accept) => {
+    const name = userDoc?.displayName || currentUser?.email?.split('@')[0] || 'Kullanıcı';
+    await respondToMatch(matchId, accept, currentUser.uid, name);
+    await loadData();
+  };
+
   const handleEnd = async (matchId) => { await endMatch(matchId); await loadData(); };
 
   const activeMatches = matches.filter(m => m.status === 'active');
   const incoming = matches.filter(m => m.status === 'pending' && m.initiatedBy !== currentUser?.uid);
   const sent = matches.filter(m => m.status === 'pending' && m.initiatedBy === currentUser?.uid);
 
+  // Harita için kullanılacak koordinat
+  const mapLat = userLat || userDoc?.campusLat || userDoc?.preferences?.campusLat || 40.9872;
+  const mapLng = userLng || userDoc?.campusLng || userDoc?.preferences?.campusLng || 29.0524;
+
   const tabs = [
     { id: 'map', label: '🗺 Harita' },
-    { id: 'list', label: '👥 Listele', count: potentials.length },
+    { id: 'list', label: '👥 Liste', count: potentials.length },
     { id: 'requests', label: '📬 İstekler', count: incoming.length || null },
   ];
 
   return (
     <AppLayout title="Eşleşmeler">
       {/* Tabs */}
-      <div className="flex gap-2 mb-5">
+      <div className="flex gap-2 mb-5 flex-wrap">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className="px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
@@ -162,7 +219,7 @@ export default function MatchesPage() {
       </div>
 
       {activeMatches.length > 0 && (
-        <div className="mb-5 flex items-center gap-3 px-4 py-3 rounded-xl"
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl"
           style={{ background: 'rgba(58,138,90,0.08)', border: '1px solid rgba(58,138,90,0.2)' }}>
           <CheckCircle2 size={16} style={{ color: '#5ABF8A' }} />
           <p className="text-sm" style={{ color: '#5ABF8A' }}>{activeMatches.length} aktif eşleşmen var</p>
@@ -175,33 +232,34 @@ export default function MatchesPage() {
         </div>
       ) : (
         <>
-          {/* ── Harita ── */}
+          {/* ── Harita Tab ── */}
           {tab === 'map' && (
             <div className="flex flex-col gap-3">
               {locationStatus === 'loading' && (
                 <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm"
                   style={{ background: 'rgba(232,160,32,0.08)', border: '1px solid rgba(232,160,32,0.2)', color: 'var(--amber)' }}>
-                  <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> Konumun alınıyor...
+                  <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Konum alınıyor...
                 </div>
               )}
               {locationStatus === 'denied' && (
                 <div className="px-4 py-2.5 rounded-xl text-sm"
-                  style={{ background: 'rgba(138,154,170,0.08)', border: '1px solid rgba(138,154,170,0.2)', color: 'var(--mist)' }}>
-                  📍 Konum izni verilmedi — kampüs konumu kullanılıyor
+                  style={{ background: 'rgba(138,154,170,0.06)', border: '1px solid rgba(138,154,170,0.15)', color: 'var(--mist)' }}>
+                  📍 Konum izni yok — kayıtlı kampüs konumun kullanılıyor
                 </div>
               )}
               {potentials.length > 0 && (
                 <div className="px-4 py-2.5 rounded-xl text-sm flex items-center gap-2"
-                  style={{ background: 'rgba(232,160,32,0.06)', border: '1px solid rgba(232,160,32,0.15)', color: 'var(--mist)' }}>
-                  💡 <span>Haritada <strong className="text-cream">{potentials.length} öğrenci</strong> var. Tıkla → profili gör → istek gönder</span>
+                  style={{ background: 'rgba(232,160,32,0.06)', border: '1px solid rgba(232,160,32,0.12)', color: 'var(--mist)' }}>
+                  💡 <span><strong className="text-cream">{potentials.length} öğrenci</strong> haritada · Tıkla → profil gör → istek gönder</span>
                 </div>
               )}
-              <div style={{ height: '460px' }}>
-                <MatchMap lat={userLat || 40.9872} lng={userLng || 29.0524} potentials={potentials} onSelectUser={setSelectedUser} />
+              <div style={{ height: '450px' }}>
+                <MatchMap lat={mapLat} lng={mapLng} potentials={potentials} onSelectUser={setSelectedUser} />
               </div>
-              <div className="flex flex-wrap gap-3 px-1">
-                {[['#E8A020','Sen (sarı nokta)'],['rgba(232,160,32,0.6)','%70+ uyum'],['rgba(122,158,122,0.8)','Orta uyum'],['rgba(90,122,90,0.8)','Kampüs']].map(([c,l]) => (
-                  <div key={l} className="flex items-center gap-2 text-xs" style={{ color: 'var(--mist)' }}>
+              <div className="flex flex-wrap gap-4 px-1 text-xs" style={{ color: 'var(--mist)' }}>
+                {[['#E8A020','Sen'],['rgba(232,160,32,0.8)','%70+ uyum'],['rgba(122,158,122,0.8)','Diğerleri'],['rgba(90,122,90,0.7)','Kampüsler']].map(([c,l]) => (
+                  <div key={l} className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-full" style={{ background: c }} />{l}
                   </div>
                 ))}
@@ -209,13 +267,13 @@ export default function MatchesPage() {
             </div>
           )}
 
-          {/* ── Liste ── */}
+          {/* ── Liste Tab ── */}
           {tab === 'list' && (
             potentials.length === 0 ? (
               <div className="glass-card p-16 text-center">
                 <p className="text-4xl mb-4">🔍</p>
                 <h3 className="font-display text-xl font-semibold text-cream mb-2">Eşleşme bulunamadı</h3>
-                <p className="text-sm" style={{ color: 'var(--mist)' }}>Platform büyüdükçe eşleşmeler çıkacak.</p>
+                <p className="text-sm" style={{ color: 'var(--mist)' }}>Onboarding'de dersleri ekleyin, platform büyüdükçe eşleşmeler artar.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -227,13 +285,13 @@ export default function MatchesPage() {
                         {user.displayName?.charAt(0)?.toUpperCase() || '?'}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-cream">{user.displayName || 'Kullanıcı'}</p>
+                        <p className="font-medium text-cream">{user.displayName}</p>
                         <p className="text-xs truncate" style={{ color: 'var(--mist)' }}>📍 {user.campusName || 'Kampüs bilgisi yok'}</p>
                       </div>
-                      <span className="text-sm font-mono font-bold flex-shrink-0" style={{ color: 'var(--amber)' }}>%{user.compatibilityScore}</span>
+                      <span className="font-mono font-bold text-sm" style={{ color: 'var(--amber)' }}>%{user.compatibilityScore}</span>
                     </div>
                     <div className="h-1.5 rounded-full" style={{ background: 'rgba(245,237,216,0.1)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${user.compatibilityScore}%`, background: 'var(--amber)' }} />
+                      <div className="h-full rounded-full transition-all" style={{ width: `${user.compatibilityScore}%`, background: 'var(--amber)' }} />
                     </div>
                     {user.commonSubjects?.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
@@ -259,7 +317,7 @@ export default function MatchesPage() {
             )
           )}
 
-          {/* ── İstekler ── */}
+          {/* ── İstekler Tab ── */}
           {tab === 'requests' && (
             <div className="flex flex-col gap-6">
               {incoming.length === 0 && sent.length === 0 && activeMatches.length === 0 ? (
@@ -273,48 +331,76 @@ export default function MatchesPage() {
                     <div>
                       <p className="section-label mb-3">Gelen İstekler ({incoming.length})</p>
                       <div className="flex flex-col gap-3">
-                        {incoming.map(m => (
-                          <div key={m.id} className="glass-card p-4 flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                              style={{ background: 'rgba(232,160,32,0.15)', color: 'var(--amber)', fontWeight: 'bold' }}>?</div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-cream">Eşleşme İsteği</p>
-                              <p className="text-xs" style={{ color: 'var(--mist)' }}>%{m.compatibilityScore} uyum · {(m.commonSubjects||[]).slice(0,2).join(', ')}</p>
+                        {incoming.map(m => {
+                          const pid = m.users?.find(id => id !== currentUser?.uid);
+                          const name = matchPartnerNames[pid] || 'Kullanıcı';
+                          return (
+                            <div key={m.id} className="glass-card p-4 flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0"
+                                style={{ background: 'rgba(232,160,32,0.15)', color: 'var(--amber)' }}>
+                                {name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-cream">{name}</p>
+                                <p className="text-xs" style={{ color: 'var(--mist)' }}>%{m.compatibilityScore} uyum · {(m.commonSubjects||[]).slice(0,2).join(', ')}</p>
+                              </div>
+                              <div className="flex gap-2 flex-shrink-0">
+                                <button onClick={() => handleRespond(m.id, true)} className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1"><CheckCircle2 size={13} /> Kabul</button>
+                                <button onClick={() => handleRespond(m.id, false)} className="btn-outline px-3 py-1.5 text-xs flex items-center gap-1"><XCircle size={13} /> Reddet</button>
+                              </div>
                             </div>
-                            <div className="flex gap-2">
-                              <button onClick={() => handleRespond(m.id, true)} className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1"><CheckCircle2 size={13} /> Kabul</button>
-                              <button onClick={() => handleRespond(m.id, false)} className="btn-outline px-3 py-1.5 text-xs flex items-center gap-1"><XCircle size={13} /> Reddet</button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
+
                   {activeMatches.length > 0 && (
                     <div>
                       <p className="section-label mb-3">Aktif Eşleşmeler ({activeMatches.length})</p>
                       <div className="flex flex-col gap-3">
-                        {activeMatches.map(m => (
-                          <div key={m.id} className="glass-card p-4 flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm flex-shrink-0" style={{ background: 'rgba(58,138,90,0.15)', color: '#5ABF8A' }}>✓</div>
-                            <div className="flex-1"><p className="font-medium text-cream">Aktif Eşleşme</p><p className="text-xs" style={{ color: 'var(--mist)' }}>{(m.commonSubjects||[]).slice(0,2).join(', ')}</p></div>
-                            <button onClick={() => handleEnd(m.id)} className="text-xs px-3 py-1.5 rounded-lg" style={{ color: '#E87070', border: '1px solid rgba(200,64,64,0.3)' }}>Sonlandır</button>
-                          </div>
-                        ))}
+                        {activeMatches.map(m => {
+                          const pid = m.users?.find(id => id !== currentUser?.uid);
+                          const name = matchPartnerNames[pid] || 'Kullanıcı';
+                          return (
+                            <div key={m.id} className="glass-card p-4 flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0"
+                                style={{ background: 'rgba(58,138,90,0.15)', color: '#5ABF8A' }}>
+                                {name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium text-cream">{name}</p>
+                                <p className="text-xs" style={{ color: '#5ABF8A' }}>✓ Aktif eşleşme</p>
+                              </div>
+                              <div className="flex gap-2 flex-shrink-0">
+                                <button onClick={() => navigate(`/profil/${pid}`)} className="btn-outline px-3 py-1.5 text-xs flex items-center gap-1"><User size={12} /> Profil</button>
+                                <button onClick={() => handleEnd(m.id)} className="px-3 py-1.5 text-xs rounded-lg flex items-center gap-1" style={{ color: '#E87070', border: '1px solid rgba(200,64,64,0.3)' }}>Sonlandır</button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
+
                   {sent.length > 0 && (
                     <div>
                       <p className="section-label mb-3">Gönderilen İstekler ({sent.length})</p>
                       <div className="flex flex-col gap-3">
-                        {sent.map(m => (
-                          <div key={m.id} className="glass-card p-4 flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm flex-shrink-0" style={{ background: 'rgba(138,154,170,0.1)', color: 'var(--mist)' }}>⏳</div>
-                            <div className="flex-1"><p className="font-medium text-cream">Bekleyen İstek</p><p className="text-xs" style={{ color: 'var(--mist)' }}>{(m.commonSubjects||[]).slice(0,2).join(', ')}</p></div>
-                            <span className="text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(138,154,170,0.1)', color: 'var(--mist)' }}>Yanıt bekleniyor</span>
-                          </div>
-                        ))}
+                        {sent.map(m => {
+                          const pid = m.users?.find(id => id !== currentUser?.uid);
+                          const name = matchPartnerNames[pid] || 'Kullanıcı';
+                          return (
+                            <div key={m.id} className="glass-card p-4 flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0"
+                                style={{ background: 'rgba(138,154,170,0.1)', color: 'var(--mist)' }}>
+                                {name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1"><p className="font-medium text-cream">{name}</p><p className="text-xs" style={{ color: 'var(--mist)' }}>⏳ Yanıt bekleniyor</p></div>
+                              <span className="text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(138,154,170,0.1)', color: 'var(--mist)' }}>Bekliyor</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -337,11 +423,12 @@ export default function MatchesPage() {
                 {selectedUser.displayName?.charAt(0)?.toUpperCase() || '?'}
               </div>
               <div>
-                <h3 className="font-display text-xl font-bold text-cream">{selectedUser.displayName || 'Kullanıcı'}</h3>
+                <h3 className="font-display text-xl font-bold text-cream">{selectedUser.displayName}</h3>
                 <p className="text-sm mt-1" style={{ color: 'var(--mist)' }}>📍 {selectedUser.campusName || ''}</p>
+                {selectedUser.faculty && <p className="text-xs mt-0.5" style={{ color: 'var(--mist)' }}>{selectedUser.faculty}</p>}
               </div>
               <div className="w-full">
-                <div className="flex justify-between text-xs mb-1"><span style={{ color: 'var(--mist)' }}>Uyum</span><span style={{ color: 'var(--amber)' }}>%{selectedUser.compatibilityScore}</span></div>
+                <div className="flex justify-between text-xs mb-1.5"><span style={{ color: 'var(--mist)' }}>Uyum Skoru</span><span style={{ color: 'var(--amber)' }}>%{selectedUser.compatibilityScore}</span></div>
                 <div className="h-2 rounded-full" style={{ background: 'rgba(245,237,216,0.1)' }}>
                   <div className="h-full rounded-full" style={{ width: `${selectedUser.compatibilityScore}%`, background: 'var(--amber)' }} />
                 </div>

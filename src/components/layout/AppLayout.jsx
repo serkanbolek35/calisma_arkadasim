@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut } from 'lucide-react';
+import { Menu, X, LogOut, Bell } from 'lucide-react';
 import { Logo } from './PublicLayout';
 import { useAuth } from '../../context/AuthContext';
 import { logoutUser } from '../../services/auth.service';
+import { listenNotifications } from '../../services/notification.service';
 
 const NAV = [
   { emoji: '📊', label: 'Dashboard', to: '/dashboard' },
@@ -16,7 +17,7 @@ const NAV = [
   { emoji: '👤', label: 'Profilim', to: '/profil' },
 ];
 
-const Sidebar = ({ onClose }) => {
+const Sidebar = ({ onClose, unreadCount }) => {
   const { currentUser, userDoc } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -42,6 +43,7 @@ const Sidebar = ({ onClose }) => {
         )}
       </div>
 
+      {/* Kullanıcı */}
       <div className="px-4 py-4 border-b" style={{ borderColor: 'rgba(245,237,216,0.07)' }}>
         <div className="flex items-center gap-3 px-2">
           <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
@@ -55,9 +57,28 @@ const Sidebar = ({ onClose }) => {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
+      {/* Bildirim butonu */}
+      <div className="px-3 pt-3">
+        <Link to="/bildirimler" onClick={onClose}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all relative"
+          style={{
+            background: location.pathname === '/bildirimler' ? 'rgba(232,160,32,0.12)' : 'rgba(245,237,216,0.04)',
+            color: location.pathname === '/bildirimler' ? 'var(--amber)' : 'var(--mist)',
+            border: location.pathname === '/bildirimler' ? '1px solid rgba(232,160,32,0.2)' : '1px solid rgba(245,237,216,0.06)',
+          }}>
+          <Bell size={16} />
+          <span>Bildirimler</span>
+          {unreadCount > 0 && (
+            <span className="ml-auto w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold"
+              style={{ background: 'var(--amber)', color: 'var(--ink)' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
+          )}
+        </Link>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-2 flex flex-col gap-0.5 overflow-y-auto">
         {NAV.map(({ emoji, label, to }) => {
-          const active = location.pathname === to || location.pathname.startsWith(to + '/');
+          const active = location.pathname === to || (to !== '/profil' && location.pathname.startsWith(to + '/'));
           return (
             <Link key={to} to={to} onClick={onClose}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
@@ -88,15 +109,26 @@ const Sidebar = ({ onClose }) => {
 };
 
 const AppLayout = ({ children, title }) => {
+  const { currentUser } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const location = useLocation();
+  const navigate = useNavigate();
   const currentPage = NAV.find(n => location.pathname.startsWith(n.to));
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsub = listenNotifications(currentUser.uid, (notifs) => {
+      setUnreadCount(notifs.filter(n => !n.read).length);
+    });
+    return () => unsub();
+  }, [currentUser]);
 
   return (
     <div className="min-h-screen bg-ink flex">
       <aside className="hidden md:flex flex-col w-60 flex-shrink-0 border-r fixed top-0 bottom-0 left-0"
         style={{ borderColor: 'rgba(245,237,216,0.07)', background: 'var(--ink)' }}>
-        <Sidebar />
+        <Sidebar unreadCount={unreadCount} />
       </aside>
 
       {mobileOpen && (
@@ -104,20 +136,31 @@ const AppLayout = ({ children, title }) => {
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-64 border-r"
             style={{ background: 'var(--ink-50)', borderColor: 'rgba(245,237,216,0.1)', zIndex: 10 }}>
-            <Sidebar onClose={() => setMobileOpen(false)} />
+            <Sidebar onClose={() => setMobileOpen(false)} unreadCount={unreadCount} />
           </aside>
         </div>
       )}
 
       <div className="flex-1 flex flex-col min-w-0 md:ml-60">
+        {/* Mobil header */}
         <header className="md:hidden px-4 py-4 border-b flex items-center gap-3"
           style={{ borderColor: 'rgba(245,237,216,0.07)' }}>
           <button onClick={() => setMobileOpen(true)} className="p-1 text-cream/60">
             <Menu size={22} />
           </button>
-          <p className="font-display text-lg font-semibold text-cream">
+          <p className="font-display text-lg font-semibold text-cream flex-1">
             {title || currentPage?.label || 'Çalışma'}
           </p>
+          {/* Mobilde bildirim zili */}
+          <button onClick={() => navigate('/bildirimler')} className="relative p-1">
+            <Bell size={20} className="text-cream/60" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold"
+                style={{ background: 'var(--amber)', color: 'var(--ink)', fontSize: '10px' }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
         </header>
         <main className="flex-1 p-5 md:p-6 overflow-y-auto">
           {children}
