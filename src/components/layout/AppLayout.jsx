@@ -17,7 +17,7 @@ const NAV = [
   { emoji: '👤', label: 'Profilim', to: '/profil' },
 ];
 
-const Sidebar = ({ onClose, unreadCount }) => {
+const Sidebar = ({ onClose }) => {
   const { currentUser, userDoc } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -57,26 +57,8 @@ const Sidebar = ({ onClose, unreadCount }) => {
         </div>
       </div>
 
-      {/* Bildirim butonu */}
-      <div className="px-3 pt-3">
-        <Link to="/bildirimler" onClick={onClose}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all relative"
-          style={{
-            background: location.pathname === '/bildirimler' ? 'rgba(232,160,32,0.12)' : 'rgba(245,237,216,0.04)',
-            color: location.pathname === '/bildirimler' ? 'var(--amber)' : 'var(--mist)',
-            border: location.pathname === '/bildirimler' ? '1px solid rgba(232,160,32,0.2)' : '1px solid rgba(245,237,216,0.06)',
-          }}>
-          <Bell size={16} />
-          <span>Bildirimler</span>
-          {unreadCount > 0 && (
-            <span className="ml-auto w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold"
-              style={{ background: 'var(--amber)', color: 'var(--ink)' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
-          )}
-        </Link>
-      </div>
-
       {/* Nav */}
-      <nav className="flex-1 px-3 py-2 flex flex-col gap-0.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-3 flex flex-col gap-0.5 overflow-y-auto">
         {NAV.map(({ emoji, label, to }) => {
           const active = location.pathname === to || (to !== '/profil' && location.pathname.startsWith(to + '/'));
           return (
@@ -126,42 +108,54 @@ const AppLayout = ({ children, title }) => {
 
   return (
     <div className="min-h-screen bg-ink flex">
+      {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-60 flex-shrink-0 border-r fixed top-0 bottom-0 left-0"
         style={{ borderColor: 'rgba(245,237,216,0.07)', background: 'var(--ink)' }}>
-        <Sidebar unreadCount={unreadCount} />
+        <Sidebar />
       </aside>
 
+      {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-64 border-r"
             style={{ background: 'var(--ink-50)', borderColor: 'rgba(245,237,216,0.1)', zIndex: 10 }}>
-            <Sidebar onClose={() => setMobileOpen(false)} unreadCount={unreadCount} />
+            <Sidebar onClose={() => setMobileOpen(false)} />
           </aside>
         </div>
       )}
 
       <div className="flex-1 flex flex-col min-w-0 md:ml-60">
-        {/* Mobil header */}
-        <header className="md:hidden px-4 py-4 border-b flex items-center gap-3"
+        {/* Üst bar — hem mobil hem desktop */}
+        <header className="px-4 md:px-6 py-3 border-b flex items-center gap-3"
           style={{ borderColor: 'rgba(245,237,216,0.07)' }}>
-          <button onClick={() => setMobileOpen(true)} className="p-1 text-cream/60">
+          {/* Mobil hamburger */}
+          <button onClick={() => setMobileOpen(true)} className="md:hidden p-1 text-cream/60 flex-shrink-0">
             <Menu size={22} />
           </button>
-          <p className="font-display text-lg font-semibold text-cream flex-1">
+
+          {/* Sayfa başlığı */}
+          <p className="font-display text-lg font-semibold text-cream flex-1 truncate">
             {title || currentPage?.label || 'Çalışma'}
           </p>
-          {/* Mobilde bildirim zili */}
-          <button onClick={() => navigate('/bildirimler')} className="relative p-1">
-            <Bell size={20} className="text-cream/60" />
+
+          {/* Bildirim zili — sağ üst */}
+          <button onClick={() => navigate('/bildirimler')}
+            className="relative flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all"
+            style={{
+              background: location.pathname === '/bildirimler' ? 'rgba(232,160,32,0.15)' : 'rgba(245,237,216,0.06)',
+              border: location.pathname === '/bildirimler' ? '1px solid rgba(232,160,32,0.3)' : '1px solid rgba(245,237,216,0.1)',
+            }}>
+            <Bell size={17} style={{ color: location.pathname === '/bildirimler' ? 'var(--amber)' : 'rgba(245,237,216,0.6)' }} />
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold"
-                style={{ background: 'var(--amber)', color: 'var(--ink)', fontSize: '10px' }}>
+              <span className="absolute -top-1 -right-1 w-4.5 h-4.5 rounded-full flex items-center justify-center font-bold"
+                style={{ background: 'var(--amber)', color: 'var(--ink)', fontSize: '10px', minWidth: '18px', height: '18px', padding: '0 3px' }}>
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
         </header>
+
         <main className="flex-1 p-5 md:p-6 overflow-y-auto">
           {children}
         </main>
