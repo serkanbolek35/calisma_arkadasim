@@ -10,14 +10,12 @@ const ContactPage = lazy(() => import('../views/public/ContactPage'));
 const PrivacyPage = lazy(() => import('../views/public/PrivacyPage'));
 const TermsPage = lazy(() => import('../views/public/TermsPage'));
 const KvkkPage = lazy(() => import('../views/public/KvkkPage'));
-
 const LoginPage = lazy(() => import('../views/auth/LoginPage'));
 const RegisterPage = lazy(() => import('../views/auth/RegisterPage'));
 const EmailVerifyPage = lazy(() => import('../views/auth/EmailVerifyPage'));
 const ForgotPasswordPage = lazy(() => import('../views/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('../views/auth/ResetPasswordPage'));
 const AccountActivatedPage = lazy(() => import('../views/auth/AccountActivatedPage'));
-
 const OnboardingPage = lazy(() => import('../views/onboarding/OnboardingPage'));
 const DashboardPage = lazy(() => import('../views/app/DashboardPage'));
 const MatchesPage = lazy(() => import('../views/app/MatchesPage'));
@@ -27,6 +25,7 @@ const SurveyPage = lazy(() => import('../views/app/SurveyPage'));
 const StudyRequestPage = lazy(() => import('../views/app/StudyRequestPage'));
 const ChatsListPage = lazy(() => import('../views/app/ChatsListPage'));
 const ChatPage = lazy(() => import('../views/app/ChatPage'));
+const ProfilePage = lazy(() => import('../views/app/ProfilePage'));
 const NotFoundPage = lazy(() => import('../views/system/NotFoundPage'));
 
 const Spinner = () => (
@@ -69,14 +68,12 @@ export default function AppRouter() {
           <Route path="/gizlilik" element={<PrivacyPage />} />
           <Route path="/kullanim-sartlari" element={<TermsPage />} />
           <Route path="/kvkk" element={<KvkkPage />} />
-
           <Route path="/giris" element={<AuthRoute><LoginPage /></AuthRoute>} />
           <Route path="/kayit" element={<AuthRoute><RegisterPage /></AuthRoute>} />
           <Route path="/email-dogrula" element={<EmailVerifyPage />} />
           <Route path="/email-dogrulama-basarili" element={<AccountActivatedPage />} />
           <Route path="/sifremi-unuttum" element={<ForgotPasswordPage />} />
           <Route path="/sifre-sifirla" element={<ResetPasswordPage />} />
-
           <Route path="/onboarding" element={<ProtectedRoute requireOnboarding={false}><OnboardingPage /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/istekler" element={<ProtectedRoute><StudyRequestPage /></ProtectedRoute>} />
@@ -86,7 +83,8 @@ export default function AppRouter() {
           <Route path="/oturumlar" element={<ProtectedRoute><SessionsPage /></ProtectedRoute>} />
           <Route path="/ilerleme" element={<ProtectedRoute><ProgressPage /></ProtectedRoute>} />
           <Route path="/anket" element={<ProtectedRoute><SurveyPage /></ProtectedRoute>} />
-
+          <Route path="/profil" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="/profil/:uid" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>

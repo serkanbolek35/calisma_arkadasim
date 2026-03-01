@@ -13,6 +13,7 @@ const NAV = [
   { emoji: '⏱', label: 'Oturumlar', to: '/oturumlar' },
   { emoji: '📈', label: 'İlerleme', to: '/ilerleme' },
   { emoji: '🧠', label: 'Anket', to: '/anket' },
+  { emoji: '👤', label: 'Profilim', to: '/profil' },
 ];
 
 const Sidebar = ({ onClose }) => {

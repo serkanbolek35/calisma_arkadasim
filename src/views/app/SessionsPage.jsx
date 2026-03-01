@@ -287,7 +287,7 @@ export default function SessionsPage() {
                 <p className="text-sm mb-5" style={{ color: 'var(--mist)' }}>
                   Eşleşmeler sayfasından birini bul ve oturum başlatabilirsin.
                 </p>
-                <a href="/eslesmeler" className="btn-primary px-6 py-2.5 text-sm inline-flex items-center gap-2">
+                <a href="#/eslesmeler" className="btn-primary px-6 py-2.5 text-sm inline-flex items-center gap-2">
                   Eşleşme Bul
                 </a>
               </div>
