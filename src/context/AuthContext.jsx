@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthChange } from '../services/auth.service';
-import { getUser } from '../services/user.service';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../services/firebase';
 import { updatePresence, setOffline } from '../services/presence.service';
 
 const AuthContext = createContext(null);
@@ -11,40 +12,46 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthChange(async (firebaseUser) => {
+    let userDocUnsub = null;
+
+    const authUnsub = onAuthChange(async (firebaseUser) => {
       setCurrentUser(firebaseUser);
+
+      // Önceki userDoc listener'ı temizle
+      if (userDocUnsub) { userDocUnsub(); userDocUnsub = null; }
+
       if (firebaseUser) {
-        const d = await getUser(firebaseUser.uid);
-        setUserDoc(d);
-        // İlk girişte presence güncelle
+        // onSnapshot ile gerçek zamanlı dinle — onboarding bitince anında güncellenir
+        userDocUnsub = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
+          if (snap.exists()) {
+            setUserDoc({ id: snap.id, ...snap.data() });
+          }
+          setLoading(false);
+        }, () => setLoading(false));
+
+        // Presence güncelle
         await updatePresence(firebaseUser.uid);
       } else {
         setUserDoc(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return unsub;
+
+    return () => {
+      authUnsub();
+      if (userDocUnsub) userDocUnsub();
+    };
   }, []);
 
+  // 5 dakikada bir presence güncelle
   useEffect(() => {
     if (!currentUser) return;
-
-    // Her 5 dakikada bir lastSeen güncelle
-    const interval = setInterval(() => {
-      updatePresence(currentUser.uid);
-    }, 5 * 60 * 1000);
-
-    // Sekme kapatılırsa/gizlenirse offline yap
+    const interval = setInterval(() => updatePresence(currentUser.uid), 5 * 60 * 1000);
     const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        setOffline(currentUser.uid);
-      } else {
-        updatePresence(currentUser.uid);
-      }
+      if (document.visibilityState === 'hidden') setOffline(currentUser.uid);
+      else updatePresence(currentUser.uid);
     };
-
     document.addEventListener('visibilitychange', handleVisibility);
-
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
@@ -52,10 +59,8 @@ export const AuthProvider = ({ children }) => {
   }, [currentUser]);
 
   const refreshUserDoc = async () => {
-    if (currentUser) {
-      const d = await getUser(currentUser.uid);
-      setUserDoc(d);
-    }
+    // onSnapshot zaten gerçek zamanlı günceller, bu fonksiyon artık gereksiz
+    // ama geriye dönük uyumluluk için bırakıldı
   };
 
   return (
