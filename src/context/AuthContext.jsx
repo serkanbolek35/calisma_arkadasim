@@ -43,10 +43,10 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // 5 dakikada bir presence güncelle
+  // 8 saniyede bir presence güncelle (10s çökme tespiti için)
   useEffect(() => {
     if (!currentUser) return;
-    const interval = setInterval(() => updatePresence(currentUser.uid), 5 * 60 * 1000);
+    const interval = setInterval(() => updatePresence(currentUser.uid), 8 * 1000);
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') setOffline(currentUser.uid);
       else updatePresence(currentUser.uid);
