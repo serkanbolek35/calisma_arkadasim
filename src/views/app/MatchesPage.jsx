@@ -218,7 +218,7 @@ export default function MatchesPage() {
       for (const u of allUsers) {
         if (u.uid === currentUser.uid) continue;
         if (sentOrActiveIds.includes(u.uid)) continue;
-        if (!isRecentlyActive(u.lastSeen, u.isOnline)) continue; // online + 20s kontrolü
+        if (!isRecentlyActive(u.lastSeen)) continue; // 30 dk kontrolü
 
         const theirSubjects = u.subjects || u.preferences?.subjects || [];
         let common = [], score = 50;

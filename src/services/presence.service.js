@@ -50,12 +50,9 @@ export const setOffline = async (uid) => {
   } catch (_) {}
 };
 
-// Son 30 dakikada aktif mi? — sadece lastSeen kullan
-export const isRecentlyActive = (lastSeen, isOnline) => {
-  // isOnline: false ise anında gizle (sekme kapandı/gizlendi)
-  if (isOnline === false) return false;
-  // lastSeen yoksa eski hesap — yine de göster
-  if (!lastSeen) return true;
+// Son 30 dakikada aktif mi?
+export const isRecentlyActive = (lastSeen) => {
+  if (!lastSeen) return false;
   const d = lastSeen.toDate?.() ?? new Date(lastSeen);
   return Date.now() - d.getTime() < 30 * 60 * 1000;
 };
