@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getMatches, sendMatchRequest, respondToMatch, endMatch } from '../../services/matching.service';
 import { getUser } from '../../services/user.service';
 import { isRecentlyActive } from '../../services/presence.service';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, addDoc, updateDoc, getDocs, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { MARMARA_KAMPUSLER } from '../../data/marmara';
 
@@ -260,6 +260,46 @@ export default function MatchesPage() {
     return () => { unsub(); matchUnsub(); };
   }, [currentUser, userDoc]);
 
+  const handleOpenChat = async (match) => {
+    // chatId zaten varsa direkt git
+    if (match.chatId) { navigate(`/sohbet/${match.chatId}`); return; }
+
+    // Yoksa oluştur
+    try {
+      const [uid1, uid2] = match.users;
+      // Zaten var mı?
+      const snap = await getDocs(collection(db, 'chats'));
+      const existing = snap.docs.find(d => {
+        const p = d.data().participants || [];
+        return p.includes(uid1) && p.includes(uid2);
+      });
+      if (existing) {
+        await updateDoc(doc(db, 'matches', match.id), { chatId: existing.id });
+        navigate(`/sohbet/${existing.id}`);
+        return;
+      }
+      // İsimleri al
+      const [u1Snap, u2Snap] = await Promise.all([
+        getDoc(doc(db, 'users', uid1)),
+        getDoc(doc(db, 'users', uid2)),
+      ]);
+      const participantNames = {
+        [uid1]: u1Snap.data()?.displayName || 'Kullanıcı',
+        [uid2]: u2Snap.data()?.displayName || 'Kullanıcı',
+      };
+      const chatRef = await addDoc(collection(db, 'chats'), {
+        participants: [uid1, uid2],
+        participantNames,
+        matchId: match.id,
+        createdAt: serverTimestamp(),
+        lastMessage: '',
+        lastMessageAt: serverTimestamp(),
+      });
+      await updateDoc(doc(db, 'matches', match.id), { chatId: chatRef.id });
+      navigate(`/sohbet/${chatRef.id}`);
+    } catch (e) { console.error(e); navigate('/sohbetler'); }
+  };
+
   const handleSendRequest = async (toUser) => {
     setSending(true);
     try {
@@ -471,7 +511,7 @@ export default function MatchesPage() {
                                 <button onClick={() => navigate(`/profil/${pid}`)} className="btn-outline px-3 py-1.5 text-xs flex items-center gap-1"><User size={12} /> Profil</button>
                                 {m.chatId
                                   ? <button onClick={() => navigate(`/sohbet/${m.chatId}`)} className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1">💬 Mesaj</button>
-                                  : <button onClick={() => navigate('/sohbetler')} className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1">💬 Mesaj</button>
+                                  : <button onClick={() => handleOpenChat(m)} className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1">💬 Mesaj</button>
                                 }
                                 <button onClick={() => handleEnd(m.id)} className="px-3 py-1.5 text-xs rounded-lg" style={{ color: '#E87070', border: '1px solid rgba(200,64,64,0.3)' }}>Sonlandır</button>
                               </div>
