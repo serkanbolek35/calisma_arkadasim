@@ -51,3 +51,6 @@ export const markAllAsRead = async (userId) => {
     await batch.commit();
   } catch (e) { console.error(e); }
 };
+
+// Alias
+export const markAllRead = markAllAsRead;
