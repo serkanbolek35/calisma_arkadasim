@@ -261,24 +261,21 @@ export default function MatchesPage() {
   }, [currentUser, userDoc]);
 
   const handleOpenChat = async (match) => {
-    // chatId zaten varsa direkt git
     if (match.chatId) { navigate(`/sohbet/${match.chatId}`); return; }
 
-    // Yoksa oluştur
     try {
       const [uid1, uid2] = match.users;
-      // Zaten var mı?
+
+      // Bu match'e ait chat var mı? (matchId'ye göre ara)
       const snap = await getDocs(collection(db, 'chats'));
-      const existing = snap.docs.find(d => {
-        const p = d.data().participants || [];
-        return p.includes(uid1) && p.includes(uid2);
-      });
+      const existing = snap.docs.find(d => d.data().matchId === match.id);
       if (existing) {
         await updateDoc(doc(db, 'matches', match.id), { chatId: existing.id });
         navigate(`/sohbet/${existing.id}`);
         return;
       }
-      // İsimleri al
+
+      // Yoksa yeni oluştur
       const [u1Snap, u2Snap] = await Promise.all([
         getDoc(doc(db, 'users', uid1)),
         getDoc(doc(db, 'users', uid2)),
