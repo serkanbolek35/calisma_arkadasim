@@ -458,7 +458,11 @@ export default function MatchesPage() {
                                 <p className="text-xs" style={{ color: '#5ABF8A' }}>✓ Aktif</p>
                               </div>
                               <div className="flex gap-2">
-                                <button onClick={() => navigate(`/profil/${pid}`)} className="btn-outline px-3 py-1.5 text-xs"><User size={12} /> Profil</button>
+                                <button onClick={() => navigate(`/profil/${pid}`)} className="btn-outline px-3 py-1.5 text-xs flex items-center gap-1"><User size={12} /> Profil</button>
+                                {m.chatId
+                                  ? <button onClick={() => navigate(`/sohbet/${m.chatId}`)} className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1">💬 Mesaj</button>
+                                  : <button onClick={() => navigate('/sohbetler')} className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1">💬 Mesaj</button>
+                                }
                                 <button onClick={() => handleEnd(m.id)} className="px-3 py-1.5 text-xs rounded-lg" style={{ color: '#E87070', border: '1px solid rgba(200,64,64,0.3)' }}>Sonlandır</button>
                               </div>
                             </div>

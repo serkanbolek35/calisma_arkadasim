@@ -6,6 +6,27 @@ import { db } from './firebase';
 import { createNotification } from './notification.service';
 import { isRecentlyActive } from './presence.service';
 
+// Eşleşme kabul edilince chat oluştur (zaten varsa oluşturma)
+const createMatchChat = async (user1Id, user2Id, matchId) => {
+  try {
+    const snap = await getDocs(collection(db, 'chats'));
+    const existing = snap.docs.find(d => {
+      const p = d.data().participants || [];
+      return p.includes(user1Id) && p.includes(user2Id);
+    });
+    if (existing) return existing.id;
+    const ref = await addDoc(collection(db, 'chats'), {
+      participants: [user1Id, user2Id],
+      matchId,
+      createdAt: serverTimestamp(),
+      lastMessage: '',
+      lastMessageAt: serverTimestamp(),
+    });
+    return ref.id;
+  } catch (e) { console.error('createMatchChat error:', e); return null; }
+};
+
+
 export const getMatches = async (userId) => {
   try {
     const q = query(collection(db, 'matches'), where('users', 'array-contains', userId));
@@ -39,6 +60,16 @@ export const respondToMatch = async (matchId, accept, responderId = '', responde
   const matchSnap = await getDoc(matchRef);
   const matchData = matchSnap.data();
   await updateDoc(matchRef, { status: accept ? 'active' : 'ended', respondedAt: serverTimestamp() });
+
+  // Kabul edilirse sohbet oluştur
+  let chatId = null;
+  if (accept && matchData?.users) {
+    chatId = await createMatchChat(matchData.users[0], matchData.users[1], matchId);
+    if (chatId) {
+      await updateDoc(matchRef, { chatId });
+    }
+  }
+
   if (matchData?.initiatedBy) {
     await createNotification(matchData.initiatedBy, {
       type: accept ? 'match_accepted' : 'match_rejected',
@@ -46,7 +77,7 @@ export const respondToMatch = async (matchId, accept, responderId = '', responde
       body: accept
         ? `${responderName || 'Kullanıcı'} eşleşme isteğini kabul etti!`
         : `${responderName || 'Kullanıcı'} eşleşme isteğini reddetti.`,
-      link: '/eslesmeler',
+      link: accept && chatId ? `/sohbet/${chatId}` : '/eslesmeler',
       fromUserId: responderId, fromName: responderName,
     });
   }
