@@ -9,12 +9,9 @@ import { isRecentlyActive } from './presence.service';
 // Eşleşme kabul edilince chat oluştur (zaten varsa oluşturma)
 const createMatchChat = async (user1Id, user2Id, matchId) => {
   try {
-    // Zaten var mı kontrol et
+    // Bu match'e ait chat var mı? (matchId'ye göre ara)
     const snap = await getDocs(collection(db, 'chats'));
-    const existing = snap.docs.find(d => {
-      const p = d.data().participants || [];
-      return p.includes(user1Id) && p.includes(user2Id);
-    });
+    const existing = snap.docs.find(d => d.data().matchId === matchId);
     if (existing) return existing.id;
 
     // Kullanıcı isimlerini al
