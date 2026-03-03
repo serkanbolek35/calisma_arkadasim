@@ -9,14 +9,25 @@ import { isRecentlyActive } from './presence.service';
 // Eşleşme kabul edilince chat oluştur (zaten varsa oluşturma)
 const createMatchChat = async (user1Id, user2Id, matchId) => {
   try {
+    // Zaten var mı kontrol et
     const snap = await getDocs(collection(db, 'chats'));
     const existing = snap.docs.find(d => {
       const p = d.data().participants || [];
       return p.includes(user1Id) && p.includes(user2Id);
     });
     if (existing) return existing.id;
+
+    // Kullanıcı isimlerini al
+    const [u1Snap, u2Snap] = await Promise.all([
+      getDoc(doc(db, 'users', user1Id)),
+      getDoc(doc(db, 'users', user2Id)),
+    ]);
+    const u1Name = u1Snap.data()?.displayName || 'Kullanıcı';
+    const u2Name = u2Snap.data()?.displayName || 'Kullanıcı';
+
     const ref = await addDoc(collection(db, 'chats'), {
       participants: [user1Id, user2Id],
+      participantNames: { [user1Id]: u1Name, [user2Id]: u2Name },
       matchId,
       createdAt: serverTimestamp(),
       lastMessage: '',

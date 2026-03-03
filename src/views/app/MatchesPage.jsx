@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getMatches, sendMatchRequest, respondToMatch, endMatch } from '../../services/matching.service';
 import { getUser } from '../../services/user.service';
 import { isRecentlyActive } from '../../services/presence.service';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { MARMARA_KAMPUSLER } from '../../data/marmara';
 
@@ -193,13 +193,23 @@ export default function MatchesPage() {
       );
     } else { setLocationStatus('denied'); }
 
+    // Eşleşmeleri gerçek zamanlı dinle (chatId güncellenince anında güncellenir)
+    const matchUnsub = onSnapshot(
+      query(collection(db, 'matches'), where('users', 'array-contains', currentUser.uid)),
+      (matchSnap) => {
+        const m = matchSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(m => m.status !== 'ended');
+        setMatches(m);
+      }
+    );
+
     // Kullanıcıları gerçek zamanlı dinle
     const unsub = onSnapshot(collection(db, 'users'), async (snap) => {
       const allUsers = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
 
-      // Eşleşmeleri al
-      const m = await getMatches(currentUser.uid);
-      setMatches(m);
+      // Eşleşmeleri al (matchUnsub zaten gerçek zamanlı günceller)
+      const m = matches;
       const sentOrActiveIds = m.map(x => x.users?.find(id => id !== currentUser.uid)).filter(Boolean);
 
       // Partner isimlerini güncelle
@@ -247,7 +257,7 @@ export default function MatchesPage() {
       setLoading(false);
     });
 
-    return () => unsub();
+    return () => { unsub(); matchUnsub(); };
   }, [currentUser, userDoc]);
 
   const handleSendRequest = async (toUser) => {
