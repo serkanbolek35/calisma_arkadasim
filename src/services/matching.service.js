@@ -76,7 +76,7 @@ export const findPotentialMatches = async (userId, mySubjects = []) => {
       const data = userDoc.data();
 
       // Sadece son 30 dakikada aktif olanlar
-      if (!isRecentlyActive(data.lastSeen)) continue;
+      if (!isRecentlyActive(data.lastSeen, data.isOnline)) continue;
 
       let prefData = null;
       try {

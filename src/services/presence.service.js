@@ -50,9 +50,17 @@ export const setOffline = async (uid) => {
   } catch (_) {}
 };
 
-// Son 30 dakikada aktif mi?
-export const isRecentlyActive = (lastSeen) => {
+// Kullanıcı aktif mi?
+// - isOnline: false ise anında gizle
+// - isOnline: true ama lastSeen 20 saniyeden eskiyse (tarayıcı çöktü/kapandı) gizle
+export const isRecentlyActive = (lastSeen, isOnline) => {
   if (!lastSeen) return false;
+  if (isOnline === false) return false; // anında gizle
   const d = lastSeen.toDate?.() ?? new Date(lastSeen);
-  return Date.now() - d.getTime() < 30 * 60 * 1000;
+  const elapsed = Date.now() - d.getTime();
+  // isOnline: true ama 20 sn'den uzun süredir güncelleme yok → tarayıcı kapandı
+  if (isOnline === true && elapsed > 20 * 1000) return false;
+  // isOnline değeri hiç yazılmamış eski hesaplar için 30 dk kontrolü
+  if (isOnline === undefined || isOnline === null) return elapsed < 30 * 60 * 1000;
+  return true;
 };

@@ -37,8 +37,9 @@ const Spinner = () => (
 );
 
 const ProtectedRoute = ({ children, requireOnboarding = true }) => {
-  const { currentUser, isOnboardingComplete, loading } = useAuth();
-  if (loading) return <Spinner />;
+  const { currentUser, userDoc, isOnboardingComplete, loading } = useAuth();
+  // userDoc henüz yüklenmediyse spinner göster — onboarding flash'ını önler
+  if (loading || (currentUser && !userDoc)) return <Spinner />;
   if (!currentUser) return <Navigate to="/giris" replace />;
   if (!currentUser.emailVerified) return <Navigate to="/email-dogrula" replace />;
   if (requireOnboarding && !isOnboardingComplete) return <Navigate to="/onboarding" replace />;

@@ -51,10 +51,14 @@ export const AuthProvider = ({ children }) => {
       if (document.visibilityState === 'hidden') setOffline(currentUser.uid);
       else updatePresence(currentUser.uid);
     };
+    const handleUnload = () => setOffline(currentUser.uid);
+
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('beforeunload', handleUnload);
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('beforeunload', handleUnload);
     };
   }, [currentUser]);
 
