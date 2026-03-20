@@ -1,31 +1,29 @@
 import {
-  collection, doc, addDoc, getDocs, getDoc,
+  collection, doc, addDoc, getDocs,
   query, where, orderBy, serverTimestamp, updateDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-// Yorum gönder (oturum sonrası partneri değerlendir)
+// Yorum gönder
 export const submitReview = async ({ fromUserId, fromName, toUserId, sessionId, rating, comment }) => {
-  // Aynı oturum için zaten yorum var mı?
+  // Bu kullanıcıya daha önce yorum yapıldı mı?
   const existing = await getDocs(
-    query(collection(db, 'reviews'), where('sessionId', '==', sessionId), where('fromUserId', '==', fromUserId))
+    query(collection(db, 'reviews'), where('fromUserId', '==', fromUserId), where('toUserId', '==', toUserId))
   );
-  if (!existing.empty) return null; // Zaten değerlendirdi
+  if (!existing.empty) return null;
 
-  const ref = await addDoc(collection(db, 'reviews'), {
+  await addDoc(collection(db, 'reviews'), {
     fromUserId, fromName,
     toUserId, sessionId,
-    rating, // 1-5
+    rating,
     comment: comment || '',
     createdAt: serverTimestamp(),
   });
 
-  // Kullanıcının ortalama puanını güncelle
   await recalcUserRating(toUserId);
-  return ref.id;
 };
 
-// Kullanıcının aldığı tüm yorumları getir
+// Kullanıcının aldığı yorumları getir
 export const getUserReviews = async (userId) => {
   try {
     const snap = await getDocs(
@@ -35,11 +33,11 @@ export const getUserReviews = async (userId) => {
   } catch { return []; }
 };
 
-// Kullanıcının ortalama puanını yeniden hesapla ve users'a yaz
+// Ortalama puanı güncelle
 export const recalcUserRating = async (userId) => {
   try {
     const reviews = await getUserReviews(userId);
-    if (reviews.length === 0) return;
+    if (!reviews.length) return;
     const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
     await updateDoc(doc(db, 'users', userId), {
       avgRating: +avg.toFixed(2),
@@ -48,7 +46,7 @@ export const recalcUserRating = async (userId) => {
   } catch (e) { console.error(e); }
 };
 
-// Belirli bir oturum için bu kullanıcının yorumu var mı?
+// Bu kullanıcıya daha önce yorum yapıldı mı?
 export const hasReviewedSession = async (sessionId, fromUserId) => {
   try {
     const snap = await getDocs(

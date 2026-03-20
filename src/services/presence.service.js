@@ -1,4 +1,4 @@
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
 // ~500m-1km rastgele sapma
@@ -12,33 +12,41 @@ export const fuzzLocation = (lat, lng) => {
 };
 
 // Presence güncelle:
-// 1. Önce anında lastSeen + isOnline:true yaz (haritada hemen görünsün)
-// 2. Sonra GPS gelirse koordinatı da güncelle
+// - lastSeen + isOnline her 8sn'de güncellenir (haritada görünmek için)
+// - activeLat/activeLng SADECE ilk girişte veya konum yoksa yazılır (haritada sabit kalır)
 export const updatePresence = async (uid) => {
   try {
-    // ADIM 1: Anında yaz — GPS beklemeden
+    // Önce mevcut konumu kontrol et
+    const userSnap = await getDoc(doc(db, 'users', uid));
+    const userData = userSnap.data() || {};
+    const hasLocation = userData.activeLat && userData.activeLng;
+
+    // Her zaman lastSeen + isOnline güncelle
     await updateDoc(doc(db, 'users', uid), {
       lastSeen: serverTimestamp(),
       isOnline: true,
     });
-  } catch (e) { console.error('Presence error:', e); }
 
-  // ADIM 2: GPS koordinatını arka planda güncelle (engelleme yok)
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { lat, lng } = fuzzLocation(pos.coords.latitude, pos.coords.longitude);
-          await updateDoc(doc(db, 'users', uid), {
-            activeLat: lat,
-            activeLng: lng,
-          });
-        } catch (_) {}
-      },
-      () => {}, // izin yoksa sessizce geç
-      { timeout: 5000, maximumAge: 60000 }
-    );
-  }
+    // Konum zaten varsa GPS'e bakma — sabit kalsın
+    if (hasLocation) return;
+
+    // Konum yoksa GPS'ten al ve fuzzla (sadece 1 kez)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const { lat, lng } = fuzzLocation(pos.coords.latitude, pos.coords.longitude);
+            await updateDoc(doc(db, 'users', uid), {
+              activeLat: lat,
+              activeLng: lng,
+            });
+          } catch (_) {}
+        },
+        () => {},
+        { timeout: 5000, maximumAge: 60000 }
+      );
+    }
+  } catch (e) { console.error('Presence error:', e); }
 };
 
 export const setOffline = async (uid) => {
@@ -47,10 +55,7 @@ export const setOffline = async (uid) => {
   } catch (_) {}
 };
 
-// Aktiflik kontrolü:
-// - isOnline: false → anında gizle
-// - isOnline: true + lastSeen 10s'den eskiyse → çöktü, gizle
-// - eski hesaplar (isOnline yok) → 30 dk içindeyse göster
+// Aktiflik kontrolü
 export const isRecentlyActive = (lastSeen, isOnline) => {
   if (isOnline === false) return false;
   if (!lastSeen) return true;

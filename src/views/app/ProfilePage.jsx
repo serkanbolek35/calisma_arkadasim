@@ -93,16 +93,15 @@ export default function ProfilePage() {
       const avgProd = rated.length ? rated.reduce((s, x) => s + (x.rating?.productivity || 0), 0) / rated.length : 0;
       setStats({ total: completed.length, partner: partnerSessions.length, totalMins, avgFocus, avgProd });
 
+      // Kendi profilim değilse: daha önce bu kullanıcıyı yorumlamış mıyım kontrol et
       if (!isOwnProfile && currentUser) {
-        const shared = completed.filter(s =>
-          s.participants?.includes(currentUser.uid) && s.participants?.includes(targetUid)
-        );
-        const reviewable = [];
-        for (const s of shared) {
-          const already = await hasReviewedSession(s.id, currentUser.uid);
-          if (!already) reviewable.push(s);
+        // Ortak oturum olmasa bile değerlendirme yapılabilsin
+        // Daha önce bu kullanıcı için yorum yapıldı mı?
+        const alreadyReviewed = reviewList.some(r => r.fromUserId === currentUser.uid);
+        if (!alreadyReviewed) {
+          // Dummy session id olarak match id kullan (ortak oturum olmasa da)
+          setReviewableSessions([{ id: `manual_${currentUser.uid}_${targetUid}` }]);
         }
-        setReviewableSessions(reviewable);
       }
     }).finally(() => setLoading(false));
   }, [targetUid]);
