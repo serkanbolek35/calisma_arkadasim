@@ -5,8 +5,12 @@ import {
 import { db } from './firebase';
 
 export const createSession = async (userId, data) => {
+  // Partner varsa her ikisini de participants'a ekle (her ikisi de görebilsin)
+  const participants = data.partnerId
+    ? [userId, data.partnerId]
+    : [userId];
   const ref = await addDoc(collection(db, 'sessions'), {
-    ...data, participants: [userId], createdAt: serverTimestamp(),
+    ...data, participants, createdAt: serverTimestamp(),
   });
   return ref.id;
 };
