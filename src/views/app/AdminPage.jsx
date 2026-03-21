@@ -6,7 +6,7 @@ import AppLayout from '../../components/layout/AppLayout';
 import { Download, RefreshCw, Users, FileText } from 'lucide-react';
 
 // Admin uid'leri buraya ekle
-const ADMIN_UIDS = ['7SW97XwwZ8YcElOJqqzSujRM53y2']; // kendi uid'ini yaz
+const ADMIN_UIDS = ['a0QNkfLOyIQJeLufcPHGGsGchsV2']; // kendi uid'ini yaz
 
 const SURVEY_LABELS = {
   ucla: 'UCLA Yalnızlık Ölçeği',
