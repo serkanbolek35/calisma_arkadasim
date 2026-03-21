@@ -5,7 +5,7 @@ import AppLayout from '../../components/layout/AppLayout';
 import { useAuth } from '../../context/AuthContext';
 import { getUser } from '../../services/user.service';
 import { getUserSessions } from '../../services/session.service';
-import { getUserReviews, submitReview, hasReviewedSession } from '../../services/review.service';
+import { getUserReviews, submitReview, hasReviewedUser } from '../../services/review.service';
 import { calcBadges } from '../../utils/badges';
 import { createStudyRequest } from '../../services/studyRequest.service';
 
@@ -67,7 +67,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [requested, setRequested] = useState(false);
-  const [reviewableSessions, setReviewableSessions] = useState([]);
+  const [canReview, setCanReview] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -85,43 +85,37 @@ export default function ProfilePage() {
     ]).then(async ([user, sessionList, reviewList]) => {
       setProfile(user);
       setReviews(reviewList);
+
       const completed = sessionList.filter(s => s.status === 'completed');
-      const partnerSessions = completed.filter(s => s.partnerId);
       const totalMins = completed.reduce((s, x) => s + (x.durationMinutes || 0), 0);
       const rated = completed.filter(s => s.rating);
       const avgFocus = rated.length ? rated.reduce((s, x) => s + (x.rating?.focusLevel || 0), 0) / rated.length : 0;
       const avgProd = rated.length ? rated.reduce((s, x) => s + (x.rating?.productivity || 0), 0) / rated.length : 0;
-      setStats({ total: completed.length, partner: partnerSessions.length, totalMins, avgFocus, avgProd });
+      setStats({ total: completed.length, partner: completed.filter(s => s.partnerId).length, totalMins, avgFocus, avgProd });
 
-      // Kendi profilim değilse: daha önce bu kullanıcıyı yorumlamış mıyım kontrol et
+      // Yorum yapabilir mi? (kendi profili değilse ve daha önce yorum yapmamışsa)
       if (!isOwnProfile && currentUser) {
-        // Ortak oturum olmasa bile değerlendirme yapılabilsin
-        // Daha önce bu kullanıcı için yorum yapıldı mı?
-        const alreadyReviewed = reviewList.some(r => r.fromUserId === currentUser.uid);
-        if (!alreadyReviewed) {
-          // Dummy session id olarak match id kullan (ortak oturum olmasa da)
-          setReviewableSessions([{ id: `manual_${currentUser.uid}_${targetUid}` }]);
-        }
+        const already = await hasReviewedUser(currentUser.uid, targetUid);
+        setCanReview(!already);
       }
     }).finally(() => setLoading(false));
   }, [targetUid]);
 
   const handleSubmitReview = async () => {
-    if (!reviewableSessions.length) return;
+    if (!canReview) return;
     setSubmittingReview(true);
     try {
       await submitReview({
         fromUserId: currentUser.uid,
         fromName: userDoc?.displayName || 'Kullanıcı',
         toUserId: targetUid,
-        sessionId: reviewableSessions[0].id,
         rating: reviewRating,
         comment: reviewComment,
       });
       setReviewDone(true);
+      setCanReview(false);
       const updated = await getUserReviews(targetUid);
       setReviews(updated);
-      setReviewableSessions([]);
     } catch (e) { console.error(e); }
     finally { setSubmittingReview(false); }
   };
@@ -235,9 +229,9 @@ export default function ProfilePage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Oturum', value: stats.total || '—', icon: '📋', tooltip: 'Tamamlanan toplam çalışma oturumu sayısı.' },
-            { label: 'Toplam Süre', value: formatTime(stats.totalMins), icon: '🕐', tooltip: 'Tüm oturumlarda geçirilen toplam çalışma süresi. Her oturum tamamlandığında güncellenir.' },
-            { label: 'Odak Puanı', value: stats.avgFocus ? stats.avgFocus.toFixed(1) : '—', icon: '🎯', tooltip: 'Oturum sonrası "Odaklanma" değerlendirmelerinin ortalaması (1–5). Kullanıcı her oturum bitiminde kendini değerlendirir.' },
-            { label: 'Verimlilik', value: stats.avgProd ? stats.avgProd.toFixed(1) : '—', icon: '⚡', tooltip: 'Oturum sonrası "Verimlilik" değerlendirmelerinin ortalaması (1–5). Tüm tamamlanan oturumların ortalamasıdır.' },
+            { label: 'Toplam Süre', value: formatTime(stats.totalMins), icon: '🕐', tooltip: 'Tüm oturumlarda geçirilen toplam çalışma süresi.' },
+            { label: 'Odak Puanı', value: stats.avgFocus ? stats.avgFocus.toFixed(1) : '—', icon: '🎯', tooltip: 'Oturum sonrası "Odaklanma" değerlendirmelerinin ortalaması (1–5).' },
+            { label: 'Verimlilik', value: stats.avgProd ? stats.avgProd.toFixed(1) : '—', icon: '⚡', tooltip: 'Oturum sonrası "Verimlilik" değerlendirmelerinin ortalaması (1–5).' },
           ].map(({ label, value, icon, tooltip }) => (
             <div key={label} className="glass-card p-4 text-center">
               <div className="text-xl mb-1">{icon}</div>
@@ -283,14 +277,14 @@ export default function ProfilePage() {
         )}
 
         {/* ── Değerlendirme yap ── */}
-        {!isOwnProfile && reviewableSessions.length > 0 && !reviewDone && (
+        {!isOwnProfile && canReview && !reviewDone && (
           <div className="glass-card p-5">
             <div className="flex items-center gap-2 mb-3">
               <MessageSquare size={16} style={{ color: 'var(--amber)' }} />
               <p className="font-medium text-cream">Bu kullanıcıyı değerlendir</p>
             </div>
             <p className="text-xs mb-4" style={{ color: 'var(--mist)' }}>
-              Birlikte tamamladığınız oturum için değerlendirme yapabilirsin.
+              Her kullanıcıya yalnızca bir kez değerlendirme yapabilirsin.
             </p>
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-3">
@@ -299,7 +293,7 @@ export default function ProfilePage() {
                 <span className="text-sm font-mono" style={{ color: 'var(--amber)' }}>{reviewRating}/5</span>
               </div>
               <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
-                placeholder="Çalışma deneyimini yaz... (isteğe bağlı)"
+                placeholder="Deneyimini yaz... (isteğe bağlı)"
                 rows={3} className="input-field resize-none text-sm"
                 style={{ background: 'rgba(245,237,216,0.05)' }} />
               <button onClick={handleSubmitReview} disabled={submittingReview}
@@ -353,7 +347,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── Profil bilgileri (kendi profili) ── */}
+        {/* ── Profil bilgileri ── */}
         {isOwnProfile && (
           <div className="glass-card p-5">
             <p className="section-label mb-3">Profil Bilgileri</p>
