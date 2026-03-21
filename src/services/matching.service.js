@@ -44,6 +44,7 @@ export const getMatches = async (userId) => {
 };
 
 export const sendMatchRequest = async (fromUserId, toUserId, commonSubjects = [], score = 0, fromName = '') => {
+  if (fromUserId === toUserId) return null; // kendine istek gönderme engeli
   const ref = await addDoc(collection(db, 'matches'), {
     users: [fromUserId, toUserId],
     initiatedBy: fromUserId,

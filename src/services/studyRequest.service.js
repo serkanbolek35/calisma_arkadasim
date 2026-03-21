@@ -6,6 +6,7 @@ import { db } from './firebase';
 
 // İstek oluştur
 export const createStudyRequest = async (userId, data) => {
+  if (data.toUserId && data.toUserId === userId) return null; // kendine istek engeli
   const ref = await addDoc(collection(db, 'studyRequests'), {
     userId,
     displayName: data.displayName,

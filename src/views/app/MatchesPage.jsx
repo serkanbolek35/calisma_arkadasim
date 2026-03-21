@@ -296,6 +296,7 @@ export default function MatchesPage() {
   };
 
   const handleSendRequest = async (toUser) => {
+    if (!toUser || toUser.uid === currentUser?.uid) return; // kendine istek gönderme
     setSending(true);
     try {
       const fromName = userDoc?.displayName || currentUser?.email?.split('@')[0] || 'Kullanıcı';
@@ -312,9 +313,9 @@ export default function MatchesPage() {
 
   const handleEnd = async (matchId) => { await endMatch(matchId); };
 
-  const activeMatches = matches.filter(m => m.status === 'active');
-  const incoming = matches.filter(m => m.status === 'pending' && m.initiatedBy !== currentUser?.uid);
-  const sent = matches.filter(m => m.status === 'pending' && m.initiatedBy === currentUser?.uid);
+  const activeMatches = matches.filter(m => m.status === 'active' && m.users?.every(id => id !== null) && new Set(m.users).size === m.users?.length);
+  const incoming = matches.filter(m => m.status === 'pending' && m.initiatedBy !== currentUser?.uid && m.users?.includes(currentUser?.uid) && m.users?.some(id => id !== currentUser?.uid));
+  const sent = matches.filter(m => m.status === 'pending' && m.initiatedBy === currentUser?.uid && m.users?.length === 2 && m.users?.some(id => id !== currentUser?.uid) && new Set(m.users).size === 2);
   const mapLat = userLat || userDoc?.campusLat || 40.9872;
   const mapLng = userLng || userDoc?.campusLng || 29.0524;
 
