@@ -222,7 +222,8 @@ export default function StudyRequestPage() {
         userDoc?.displayName || currentUser.email?.split('@')[0] || 'Kullanıcı',
         request
       );
-      navigate(`/sohbet/${chatId}`);
+      // Sohbet oluştur ama oturumlar sayfasına yönlendir — partner otomatik seçili gelsin
+      navigate(`/oturumlar?partnerId=${request.userId}&partnerName=${encodeURIComponent(request.displayName)}&chatId=${chatId}&subject=${encodeURIComponent(request.subject || 'Genel Çalışma')}`);
     } catch (e) {
       console.error(e);
       setAccepting(null);

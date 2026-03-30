@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Square, CheckCircle2, BookOpen, Clock, UserCheck } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import { useAuth } from '../../context/AuthContext';
 import { getUserSessions, createSession, updateSessionStatus, addSessionRating } from '../../services/session.service';
@@ -125,6 +126,7 @@ const PlanModal = ({ partner, subjects, onClose, onStart }) => {
 // ── Ana Sayfa ─────────────────────────────────────────────────
 export default function SessionsPage() {
   const { currentUser } = useAuth();
+  const location = useLocation();
   const timer = useTimer();
   const [sessions, setSessions] = useState([]);
   const [partners, setPartners] = useState([]);
@@ -171,6 +173,18 @@ export default function SessionsPage() {
   };
 
   useEffect(() => { loadData(); }, [currentUser]);
+
+  // URL'den gelen partner bilgisi ile oturum planı modalını otomatik aç
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const partnerId = params.get('partnerId');
+    const partnerName = params.get('partnerName');
+    const subject = params.get('subject');
+    if (partnerId && partnerName) {
+      setPlanPartner({ uid: partnerId, displayName: decodeURIComponent(partnerName), commonSubjects: subject ? [decodeURIComponent(subject)] : [] });
+      setShowPlan(true);
+    }
+  }, [location.search]);
 
   const handleOpenPlan = (partner = null) => {
     setPlanPartner(partner);
