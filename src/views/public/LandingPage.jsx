@@ -1,12 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../services/firebase';
 import PublicLayout from '../../components/layout/PublicLayout';
 import { useAuth } from '../../context/AuthContext';
 
 export default function LandingPage() {
   const { currentUser, isOnboardingComplete, loading } = useAuth();
   const navigate = useNavigate();
+  const [realStats, setRealStats] = useState({ users: '...', sessions: '...', matches: '...', surveys: '...' });
 
   useEffect(() => {
     if (loading) return;
@@ -14,6 +17,25 @@ export default function LandingPage() {
       navigate(isOnboardingComplete ? '/dashboard' : '/onboarding', { replace: true });
     }
   }, [currentUser, isOnboardingComplete, loading]);
+
+  useEffect(() => {
+    // Gerçek istatistikleri çek
+    Promise.all([
+      getDocs(collection(db, 'users')),
+      getDocs(collection(db, 'sessions')),
+      getDocs(collection(db, 'matches')),
+      getDocs(collection(db, 'surveys')),
+    ]).then(([u, s, m, sv]) => {
+      const completedSessions = s.docs.filter(d => d.data().status === 'completed').length;
+      const activeMatches = m.docs.filter(d => d.data().status === 'active').length;
+      setRealStats({
+        users: u.size,
+        sessions: completedSessions,
+        matches: activeMatches,
+        surveys: sv.size,
+      });
+    }).catch(() => {});
+  }, []);
 
   if (loading || currentUser) return null;
 
@@ -73,7 +95,12 @@ export default function LandingPage() {
       {/* Stats */}
       <section className="py-16 border-y" style={{ borderColor: 'rgba(245,237,216,0.07)' }}>
         <div className="max-w-4xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
-          {[['1200+','Kayıtlı Öğrenci'],['%85','Eşleşme Başarısı'],['4800+','Tamamlanan Oturum'],['48','Üniversite']].map(([v,l]) => (
+          {[
+            [realStats.users, 'Kayıtlı Öğrenci'],
+            [realStats.sessions, 'Tamamlanan Oturum'],
+            [realStats.matches, 'Aktif Eşleşme'],
+            [realStats.surveys, 'Anket Dolduran'],
+          ].map(([v,l]) => (
             <div key={l} className="text-center">
               <p className="font-display text-3xl font-bold mb-1" style={{ color: 'var(--amber)' }}>{v}</p>
               <p className="text-sm" style={{ color: 'var(--mist)' }}>{l}</p>

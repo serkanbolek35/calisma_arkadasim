@@ -13,19 +13,34 @@ const TIME_SLOTS = [
 ];
 
 // ── Yeni İstek Modal ─────────────────────────────────────────
+const COMMON_SUBJECTS = [
+  'Matematik', 'Fizik', 'Kimya', 'Biyoloji',
+  'Türkçe / Edebiyat', 'Tarih', 'Coğrafya',
+  'İngilizce', 'Almanca', 'Fransızca',
+  'Programlama', 'Veri Yapıları', 'Algoritmalar',
+  'İşletme', 'Ekonomi', 'Muhasebe', 'Hukuk',
+  'Psikoloji', 'Sosyoloji', 'Felsefe',
+  'Genel Çalışma', 'Sınav Hazırlığı', 'Proje / Ödev',
+  'Diğer',
+];
+
 const NewRequestModal = ({ subjects, onClose, onSave }) => {
+  const allSubjects = [...new Set([...subjects, ...COMMON_SUBJECTS])];
   const [form, setForm] = useState({
     subject: subjects[0] || 'Genel Çalışma',
+    customSubject: '',
     location: MARMARA_KAMPUSLER[0].ad,
     date: new Date().toISOString().split('T')[0],
     timeSlot: TIME_SLOTS[2],
     note: '',
   });
   const [saving, setSaving] = useState(false);
+  const finalSubject = form.subject === 'Diğer' ? form.customSubject || 'Diğer' : form.subject;
 
   const handleSave = async () => {
+    if (!finalSubject.trim()) return;
     setSaving(true);
-    await onSave(form);
+    await onSave({ ...form, subject: finalSubject });
     setSaving(false);
   };
 
@@ -46,9 +61,14 @@ const NewRequestModal = ({ subjects, onClose, onSave }) => {
             <label className="text-xs font-mono tracking-widest uppercase mb-1.5 block" style={{ color: 'var(--mist)' }}>Ders *</label>
             <select value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
               className="input-field" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }}>
-              {subjects.map(s => <option key={s} value={s} style={{ background: '#1A1A1A' }}>{s}</option>)}
-              <option value="Genel Çalışma" style={{ background: '#1A1A1A' }}>Genel Çalışma</option>
+              {allSubjects.map(s => <option key={s} value={s} style={{ background: '#1A1A1A' }}>{s}</option>)}
             </select>
+            {form.subject === 'Diğer' && (
+              <input type="text" value={form.customSubject}
+                onChange={e => setForm(f => ({ ...f, customSubject: e.target.value }))}
+                placeholder="Ders adını yaz..."
+                className="input-field mt-2" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }} />
+            )}
           </div>
 
           <div>

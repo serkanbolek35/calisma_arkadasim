@@ -26,9 +26,11 @@ export const createStudyRequest = async (userId, data) => {
 export const getOpenRequests = async (currentUserId) => {
   try {
     const snap = await getDocs(collection(db, 'studyRequests'));
+    const today = new Date().toISOString().split('T')[0];
     return snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(r => r.userId !== currentUserId && r.status === 'open')
+      .filter(r => !r.date || r.date >= today) // Tarihi geçmiş olanları gizle
       .sort((a, b) => {
         const ta = a.createdAt?.toMillis?.() ?? 0;
         const tb = b.createdAt?.toMillis?.() ?? 0;
