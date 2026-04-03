@@ -19,7 +19,7 @@ export default function LandingPage() {
   }, [currentUser, isOnboardingComplete, loading]);
 
   useEffect(() => {
-    // Gerçek istatistikleri çek
+    // Gerçek istatistikleri çek — kullanıcı durumundan bağımsız
     Promise.all([
       getDocs(collection(db, 'users')),
       getDocs(collection(db, 'sessions')),
@@ -34,8 +34,10 @@ export default function LandingPage() {
         matches: activeMatches,
         surveys: sv.size,
       });
-    }).catch(() => {});
-  }, []);
+    }).catch(() => {
+      setRealStats({ users: 0, sessions: 0, matches: 0, surveys: 0 });
+    });
+  }, []); // boş dependency — sadece 1 kez çalışır, loading beklemez
 
   if (loading || currentUser) return null;
 

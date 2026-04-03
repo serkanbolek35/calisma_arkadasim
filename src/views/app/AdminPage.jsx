@@ -143,11 +143,12 @@ export default function AdminPage() {
   const downloadUsageExcel = async () => {
     setLoading(true);
     try {
-      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap] = await Promise.all([
+      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, contactsSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'sessions')),
         getDocs(collection(db, 'matches')),
         getDocs(collection(db, 'reviews')),
+        getDocs(collection(db, 'contacts')),
       ]);
 
       const userMap = {};
@@ -156,9 +157,21 @@ export default function AdminPage() {
       const wb = XLSX.utils.book_new();
 
       // ── Sheet 1: Kullanıcılar ──
+      // Reviews'dan kullanıcı başına ortalama hesapla
+      const reviewsByUser = {};
+      reviewsSnap.docs.forEach(d => {
+        const r = d.data();
+        if (!reviewsByUser[r.toUserId]) reviewsByUser[r.toUserId] = [];
+        reviewsByUser[r.toUserId].push(r.rating);
+      });
+
       const userRows = [['No', 'İsim', 'Email', 'Fakülte', 'Bölüm', 'Sınıf', 'Kampüs', 'Kayıt Tarihi', 'Son Görülme', 'Ortalama Puan', 'Yorum Sayısı']];
       usersSnap.docs.forEach((d, i) => {
         const u = d.data();
+        const userReviews = reviewsByUser[d.id] || [];
+        const avgRating = userReviews.length
+          ? (userReviews.reduce((s, r) => s + r, 0) / userReviews.length).toFixed(2)
+          : '';
         userRows.push([
           i + 1,
           u.displayName || '',
@@ -169,8 +182,8 @@ export default function AdminPage() {
           u.campusName || '',
           formatDate(u.createdAt),
           formatDate(u.lastSeen),
-          u.avgRating ? u.avgRating.toFixed(2) : '',
-          u.reviewCount || 0,
+          avgRating,
+          userReviews.length,
         ]);
       });
       const wsUsers = XLSX.utils.aoa_to_sheet(userRows);
@@ -236,7 +249,17 @@ export default function AdminPage() {
       wsReviews['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 8 }, { wch: 40 }, { wch: 18 }];
       XLSX.utils.book_append_sheet(wb, wsReviews, 'Yorumlar');
 
-      // ── Sheet 5: Özet ──
+      // ── Sheet 5: İletişim Mesajları ──
+      const contactRows = [['No', 'Ad Soyad', 'E-posta', 'Konu', 'Mesaj', 'Tarih']];
+      contactsSnap.docs.forEach((d, i) => {
+        const c = d.data();
+        contactRows.push([i + 1, c.name || '', c.email || '', c.subject || '', c.message || '', formatDate(c.createdAt)]);
+      });
+      const wsContacts = XLSX.utils.aoa_to_sheet(contactRows);
+      wsContacts['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 28 }, { wch: 25 }, { wch: 50 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsContacts, 'İletişim Mesajları');
+
+      // ── Sheet 6: Özet ──
       const completedSessions = sessionsSnap.docs.filter(d => d.data().status === 'completed');
       const totalMins = completedSessions.reduce((s, d) => s + (d.data().durationMinutes || 0), 0);
       const summaryRows = [
