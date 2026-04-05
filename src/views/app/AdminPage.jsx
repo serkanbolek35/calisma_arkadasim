@@ -166,10 +166,20 @@ export default function AdminPage() {
         reviewsByUser[r.toUserId].push(r.rating);
       });
 
-      const userRows = [['No', 'İsim', 'Email', 'Fakülte', 'Bölüm', 'Sınıf', 'Kampüs', 'Kayıt Tarihi', 'Son Görülme', 'Ortalama Puan', 'Yorum Sayısı']];
-      usersSnap.docs.forEach((d, i) => {
+      // Email bazlı dedupe — aynı emailden birden fazla kayıt olabilir, en güncelini al
+      const emailMap = {};
+      usersSnap.docs.forEach(d => {
         const u = d.data();
-        const userReviews = reviewsByUser[d.id] || [];
+        const email = u.email || d.id;
+        if (!emailMap[email] || (u.lastSeen?.toMillis?.() ?? 0) > (emailMap[email].data.lastSeen?.toMillis?.() ?? 0)) {
+          emailMap[email] = { id: d.id, data: u };
+        }
+      });
+      const uniqueUsers = Object.values(emailMap);
+
+      const userRows = [['No', 'İsim', 'Email', 'Fakülte', 'Bölüm', 'Sınıf', 'Kampüs', 'Kayıt Tarihi', 'Son Görülme', 'Ortalama Puan', 'Yorum Sayısı']];
+      uniqueUsers.forEach(({ id, data: u }, i) => {
+        const userReviews = reviewsByUser[id] || [];
         const avgRating = userReviews.length
           ? (userReviews.reduce((s, r) => s + r, 0) / userReviews.length).toFixed(2)
           : '';
@@ -251,11 +261,11 @@ export default function AdminPage() {
       XLSX.utils.book_append_sheet(wb, wsReviews, 'Yorumlar');
 
       // ── Sheet 5: Uygulama Logları (Eşleşme + Oturum Detayları) ──
-      const logRows = [['No', 'Kullanıcı 1', 'Kullanıcı 2', 'Ders', 'Oturum Türü', 'Başlangıç Tarihi', 'Başlangıç Saati', 'Bitiş Saati', 'Süre (dk)', 'Odak', 'Verimlilik', 'Stres', 'Oturum ID']];
+      const logRows = [['No', 'Kullanıcı 1', 'Kullanıcı 2', 'Ders', 'Oturum Türü', 'Durum', 'Başlangıç Tarihi', 'Başlangıç Saati', 'Bitiş Saati', 'Süre (dk)', 'Odak', 'Verimlilik', 'Stres', 'Oturum ID']];
       let logNo = 1;
       sessionsSnap.docs.forEach(d => {
         const s = d.data();
-        if (s.status !== 'completed') return;
+        // Tüm oturumları göster (tamamlanan ve aktif)
         const startDate = s.startedAt?.toDate?.() ?? s.createdAt?.toDate?.() ?? null;
         const endDate = s.endedAt?.toDate?.() ?? null;
         const userId = s.participants?.[0] || '';
@@ -264,7 +274,8 @@ export default function AdminPage() {
           userMap[userId]?.displayName || userId,
           s.partnerName || '—',
           s.subject || 'Genel Çalışma',
-          s.coSessionId ? 'Eş Zamanlı' : 'Bireysel',
+          s.coSessionId ? 'Eş Zamanlı' : 'Bireysel', // Tür
+          s.status === 'completed' ? 'Tamamlandı' : 'Aktif',
           startDate ? startDate.toLocaleDateString('tr-TR') : '',
           startDate ? startDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '',
           endDate ? endDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '',

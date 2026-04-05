@@ -273,7 +273,21 @@ export default function SessionsPage() {
         getMatches(currentUser.uid),
         getUserPreferences(currentUser.uid),
       ]);
-      setSessions(sessionList);
+
+      // Oturumlardaki partner isimlerini Firestore'dan doğrula
+      const fixedSessions = await Promise.all(sessionList.map(async (s) => {
+        if (s.partnerId && s.partnerId !== currentUser.uid) {
+          try {
+            const partnerDoc = await getUser(s.partnerId);
+            if (partnerDoc?.displayName) {
+              return { ...s, partnerName: partnerDoc.displayName };
+            }
+          } catch (_) {}
+        }
+        return s;
+      }));
+
+      setSessions(fixedSessions);
       setMySubjects(prefs?.subjects?.length > 0 ? prefs.subjects : ['Genel Çalışma']);
       const activeMatches = matches.filter(m => m.status === 'active');
       const partnerList = await Promise.all(
