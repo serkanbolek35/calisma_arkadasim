@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import { useAuth } from '../../context/AuthContext';
 import { getUserSessions, createSession, updateSessionStatus, addSessionRating } from '../../services/session.service';
-import { createCoSessionRequest, joinCoSession, listenCoSession, endCoSession, generateCode } from '../../services/coSession.service';
+import { createCoSessionRequest, joinWithCode, listenCoSession, endCoSession } from '../../services/coSession.service';
 import { getMatches } from '../../services/matching.service';
 import { getUser, getUserPreferences } from '../../services/user.service';
 import { serverTimestamp } from 'firebase/firestore';
@@ -95,38 +95,7 @@ const CoSessionModal = ({ partner, subject, currentUser, userDoc, onClose, onSes
     finally { setSending(false); }
   };
 
-  const handleJoinWithCode = async () => {
-    setError('');
-    if (enteredCode.length !== 6) { setError('6 haneli kodu girin'); return; }
-
-    // Bu kullanıcı için bekleyen coSession bul
-    // Basitleştirme: kullanıcı kodu partner'a bildirilen coSessionId ile eşleştirir
-    // Burada kod doğrulaması için Firestore'da sorgulama yapıyoruz
-    const { getDocs, collection, query, where } = await import('firebase/firestore');
-    const { db } = await import('../../services/firebase');
-    const snap = await getDocs(query(
-      collection(db, 'coSessions'),
-      where('partnerId', '==', currentUser.uid),
-      where('code', '==', enteredCode),
-      where('status', '==', 'waiting')
-    ));
-
-    if (snap.empty) { setError('Geçersiz kod veya oturum bulunamadı'); return; }
-
-    const sessionDoc = snap.docs[0];
-    setCoSessionId(sessionDoc.id);
-    const result = await joinCoSession(sessionDoc.id, currentUser.uid, false);
-
-    if (result.error) { setError(result.error); return; }
-
-    unsubRef.current = listenCoSession(sessionDoc.id, (session) => {
-      if (session.status === 'active') {
-        setPhase('active');
-        onSessionStarted(sessionDoc.id, session);
-      }
-    });
-    setPhase('waiting');
-  };
+  // partner kodu ayrı modaldan (CodeEntryModal) girer
 
   useEffect(() => {
     return () => { if (unsubRef.current) unsubRef.current(); };
@@ -198,28 +167,10 @@ const CodeEntryModal = ({ currentUser, userDoc, onClose, onSessionStarted }) => 
     if (code.length !== 6) { setError('6 haneli kodu girin'); return; }
     setLoading(true);
     try {
-      const { getDocs, collection, query, where } = await import('firebase/firestore');
-      const { db } = await import('../../services/firebase');
-      const snap = await getDocs(query(
-        collection(db, 'coSessions'),
-        where('partnerId', '==', currentUser.uid),
-        where('code', '==', code),
-        where('status', '==', 'waiting')
-      ));
-
-      if (snap.empty) { setError('Geçersiz kod veya oturum bulunamadı'); setLoading(false); return; }
-
-      const sessionDoc = snap.docs[0];
-      await joinCoSession(sessionDoc.id, currentUser.uid, false);
-
-      // Oturumu dinle
-      const { listenCoSession } = await import('../../services/coSession.service');
-      const unsub = listenCoSession(sessionDoc.id, (session) => {
-        if (session.status === 'active') {
-          unsub();
-          onSessionStarted(sessionDoc.id, session);
-        }
-      });
+      const result = await joinWithCode(code, currentUser.uid);
+      if (result.error) { setError(result.error); setLoading(false); return; }
+      // Oturum aktif oldu, direkt başlat
+      onSessionStarted(result.id, { ...result.data, status: 'active' });
     } catch (e) { setError('Bir hata oluştu'); console.error(e); }
     finally { setLoading(false); }
   };

@@ -143,12 +143,13 @@ export default function AdminPage() {
   const downloadUsageExcel = async () => {
     setLoading(true);
     try {
-      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, contactsSnap] = await Promise.all([
+      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, contactsSnap, coSessionsSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'sessions')),
         getDocs(collection(db, 'matches')),
         getDocs(collection(db, 'reviews')),
         getDocs(collection(db, 'contacts')),
+        getDocs(collection(db, 'coSessions')),
       ]);
 
       const userMap = {};
@@ -249,7 +250,57 @@ export default function AdminPage() {
       wsReviews['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 8 }, { wch: 40 }, { wch: 18 }];
       XLSX.utils.book_append_sheet(wb, wsReviews, 'Yorumlar');
 
-      // ── Sheet 5: İletişim Mesajları ──
+      // ── Sheet 5: Uygulama Logları (Eşleşme + Oturum Detayları) ──
+      const logRows = [['No', 'Kullanıcı 1', 'Kullanıcı 2', 'Ders', 'Oturum Türü', 'Başlangıç Tarihi', 'Başlangıç Saati', 'Bitiş Saati', 'Süre (dk)', 'Odak', 'Verimlilik', 'Stres', 'Oturum ID']];
+      let logNo = 1;
+      sessionsSnap.docs.forEach(d => {
+        const s = d.data();
+        if (s.status !== 'completed') return;
+        const startDate = s.startedAt?.toDate?.() ?? s.createdAt?.toDate?.() ?? null;
+        const endDate = s.endedAt?.toDate?.() ?? null;
+        const userId = s.participants?.[0] || '';
+        logRows.push([
+          logNo++,
+          userMap[userId]?.displayName || userId,
+          s.partnerName || '—',
+          s.subject || 'Genel Çalışma',
+          s.coSessionId ? 'Eş Zamanlı' : 'Bireysel',
+          startDate ? startDate.toLocaleDateString('tr-TR') : '',
+          startDate ? startDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '',
+          endDate ? endDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '',
+          s.durationMinutes || 0,
+          s.rating?.focusLevel || '',
+          s.rating?.productivity || '',
+          s.rating?.stressLevel || '',
+          d.id,
+        ]);
+      });
+      const wsLogs = XLSX.utils.aoa_to_sheet(logRows);
+      wsLogs['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 24 }];
+      XLSX.utils.book_append_sheet(wb, wsLogs, 'Uygulama Logları');
+
+      // ── Sheet 6: Eş Zamanlı Oturumlar ──
+      const coRows = [['No', 'Başlatan', 'Partner', 'Ders', 'Kod', 'Durum', 'Oluşturulma', 'Başlangıç', 'Bitiş', 'Süre (dk)']];
+      coSessionsSnap.docs.forEach((d, i) => {
+        const c = d.data();
+        coRows.push([
+          i + 1,
+          c.initiatorName || '',
+          c.partnerName || '',
+          c.subject || '',
+          c.code || '',
+          c.status === 'active' ? 'Aktif' : c.status === 'ended' ? 'Tamamlandı' : 'Bekliyor',
+          formatDate(c.createdAt),
+          formatDate(c.startedAt),
+          formatDate(c.endedAt),
+          c.durationMinutes || '',
+        ]);
+      });
+      const wsCoSessions = XLSX.utils.aoa_to_sheet(coRows);
+      wsCoSessions['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 10 }];
+      XLSX.utils.book_append_sheet(wb, wsCoSessions, 'Eş Zamanlı Oturumlar');
+
+      // ── Sheet 7: İletişim Mesajları ──
       const contactRows = [['No', 'Ad Soyad', 'E-posta', 'Konu', 'Mesaj', 'Tarih']];
       contactsSnap.docs.forEach((d, i) => {
         const c = d.data();

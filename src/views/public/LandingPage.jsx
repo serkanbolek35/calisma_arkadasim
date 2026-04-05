@@ -19,25 +19,23 @@ export default function LandingPage() {
   }, [currentUser, isOnboardingComplete, loading]);
 
   useEffect(() => {
-    // Gerçek istatistikleri çek — kullanıcı durumundan bağımsız
-    Promise.all([
-      getDocs(collection(db, 'users')),
-      getDocs(collection(db, 'sessions')),
-      getDocs(collection(db, 'matches')),
-      getDocs(collection(db, 'surveys')),
-    ]).then(([u, s, m, sv]) => {
-      const completedSessions = s.docs.filter(d => d.data().status === 'completed').length;
-      const activeMatches = m.docs.filter(d => d.data().status === 'active').length;
-      setRealStats({
-        users: u.size,
-        sessions: completedSessions,
-        matches: activeMatches,
-        surveys: sv.size,
-      });
-    }).catch(() => {
-      setRealStats({ users: 0, sessions: 0, matches: 0, surveys: 0 });
-    });
-  }, []); // boş dependency — sadece 1 kez çalışır, loading beklemez
+    const fetchStats = () => {
+      Promise.all([
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'sessions')),
+        getDocs(collection(db, 'matches')),
+        getDocs(collection(db, 'surveys')),
+      ]).then(([u, s, m, sv]) => {
+        setRealStats({
+          users: u.size,
+          sessions: s.docs.filter(d => d.data().status === 'completed').length,
+          matches: m.docs.filter(d => d.data().status === 'active').length,
+          surveys: sv.size,
+        });
+      }).catch(() => fetchStats()); // hata olursa tekrar dene
+    };
+    fetchStats();
+  }, []);
 
   if (loading || currentUser) return null;
 
