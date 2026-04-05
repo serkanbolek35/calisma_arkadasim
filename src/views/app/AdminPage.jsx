@@ -65,12 +65,13 @@ export default function AdminPage() {
   const loadStats = async () => {
     setLoading(true);
     try {
+      const safeGetStat = async (col) => { try { return await getDocs(collection(db, col)); } catch { return { docs: [], size: 0 }; } };
       const [usersSnap, surveysSnap, sessionsSnap, matchesSnap, reviewsSnap] = await Promise.all([
-        getDocs(collection(db, 'users')),
-        getDocs(collection(db, 'surveys')),
-        getDocs(collection(db, 'sessions')),
-        getDocs(collection(db, 'matches')),
-        getDocs(collection(db, 'reviews')),
+        safeGetStat('users'),
+        safeGetStat('surveys'),
+        safeGetStat('sessions'),
+        safeGetStat('matches'),
+        safeGetStat('reviews'),
       ]);
       const completedCounts = {};
       Object.keys(SURVEYS).forEach(k => completedCounts[k] = 0);
@@ -143,13 +144,15 @@ export default function AdminPage() {
   const downloadUsageExcel = async () => {
     setLoading(true);
     try {
+      // Her koleksiyonu ayrı ayrı çek — biri hata verse diğerleri etkilenmesin
+      const safeGet = async (col) => { try { return await getDocs(collection(db, col)); } catch (e) { console.warn(col, 'okuma hatası:', e); return { docs: [] }; } };
       const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, contactsSnap, coSessionsSnap] = await Promise.all([
-        getDocs(collection(db, 'users')),
-        getDocs(collection(db, 'sessions')),
-        getDocs(collection(db, 'matches')),
-        getDocs(collection(db, 'reviews')),
-        getDocs(collection(db, 'contacts')),
-        getDocs(collection(db, 'coSessions')),
+        safeGet('users'),
+        safeGet('sessions'),
+        safeGet('matches'),
+        safeGet('reviews'),
+        safeGet('contacts'),
+        safeGet('coSessions'),
       ]);
 
       const userMap = {};
@@ -287,7 +290,7 @@ export default function AdminPage() {
         ]);
       });
       const wsLogs = XLSX.utils.aoa_to_sheet(logRows);
-      wsLogs['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 24 }];
+      wsLogs['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 24 }];
       XLSX.utils.book_append_sheet(wb, wsLogs, 'Uygulama Logları');
 
       // ── Sheet 6: Eş Zamanlı Oturumlar ──

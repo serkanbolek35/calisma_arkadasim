@@ -306,6 +306,11 @@ export default function SessionsPage() {
 
   useEffect(() => { loadData(); }, [currentUser]);
 
+  // Cleanup coSession listener on unmount
+  useEffect(() => {
+    return () => { if (coSessionUnsubRef.current) coSessionUnsubRef.current(); };
+  }, []);
+
   // URL'den gelen partner bilgisi (çalışma isteği kabulünden)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -339,6 +344,31 @@ export default function SessionsPage() {
     setActiveSession({ id: sessionId, subject, duration: 60, partner: { uid: partnerId, displayName: partnerName }, coSessionId });
     timer.reset();
     timer.start();
+
+    // coSession'ı dinle — partner durdurursa bu kullanıcıda da otomatik dursun
+    if (coSessionUnsubRef.current) coSessionUnsubRef.current();
+    coSessionUnsubRef.current = listenCoSession(coSessionId, async (cs) => {
+      if (cs.status === 'ended') {
+        // Partner oturumu sonlandırdı
+        coSessionUnsubRef.current?.();
+        coSessionUnsubRef.current = null;
+        setActiveSession(prev => {
+          if (!prev) return prev;
+          // Timer'ı durdur ve rating modalını aç
+          timer.stop();
+          const mins = Math.floor(timer.secs / 60);
+          // Session'ı güncelle
+          updateSessionStatus(sessionId, 'completed', {
+            durationMinutes: cs.durationMinutes || mins,
+            endedAt: serverTimestamp(),
+          });
+          setCompletedId(sessionId);
+          setShowRating(true);
+          return null;
+        });
+        await loadData();
+      }
+    });
   };
 
   // Yalnız oturum başlat
