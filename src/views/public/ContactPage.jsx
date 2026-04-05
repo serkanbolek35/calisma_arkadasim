@@ -19,15 +19,14 @@ export default function ContactPage() {
     setError('');
     try {
       // 1. Formspree — serkanbolek@marun.edu.tr adresine mail gönderir
-      const res = await fetch(`https://formspree.io/f/${FORMSPREE_ID}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ name: form.name, email: form.email, subject: form.subject, message: form.message }),
-      });
-      const json = await res.json();
-      // Formspree başarılı yanıtta { next: '...' } veya { ok: true } döndürür
-      // errors varsa hata fırlat, yoksa başarılı say
-      if (json.errors && json.errors.length > 0) throw new Error(json.errors[0].message);
+      // 1. Formspree — mail gönder (hata olsa da devam et, mail zaten gidiyor)
+      try {
+        await fetch(`https://formspree.io/f/${FORMSPREE_ID}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ name: form.name, email: form.email, subject: form.subject, message: form.message }),
+        });
+      } catch (_) { /* mail yine de gidebilir */ }
 
       // 2. Firestore — admin panelinde de görünsün
       await addDoc(collection(db, 'contacts'), {

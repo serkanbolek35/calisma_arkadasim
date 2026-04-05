@@ -73,9 +73,14 @@ const CoSessionModal = ({ partner, subject, currentUser, userDoc, onClose, onSes
   const handleSendInvite = async () => {
     setSending(true);
     try {
+      // Firestore'dan gerçek ismi çek (aynı bilgisayarda çoklu hesap sorununu önler)
+      const { getDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../../services/firebase');
+      const mySnap = await getDoc(doc(db, 'users', currentUser.uid));
+      const myName = mySnap.data()?.displayName || currentUser.email?.split('@')[0] || 'Kullanıcı';
       const result = await createCoSessionRequest({
         initiatorId: currentUser.uid,
-        initiatorName: userDoc?.displayName || 'Kullanıcı',
+        initiatorName: myName,
         partnerId: partner.uid,
         partnerName: partner.displayName,
         subject,
