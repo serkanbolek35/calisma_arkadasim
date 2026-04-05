@@ -24,7 +24,10 @@ export default function ContactPage() {
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({ name: form.name, email: form.email, subject: form.subject, message: form.message }),
       });
-      if (!res.ok) throw new Error('Formspree error');
+      const json = await res.json();
+      // Formspree başarılı yanıtta { next: '...' } veya { ok: true } döndürür
+      // errors varsa hata fırlat, yoksa başarılı say
+      if (json.errors && json.errors.length > 0) throw new Error(json.errors[0].message);
 
       // 2. Firestore — admin panelinde de görünsün
       await addDoc(collection(db, 'contacts'), {
