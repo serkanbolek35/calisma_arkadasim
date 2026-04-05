@@ -331,15 +331,27 @@ export default function SessionsPage() {
     const partnerId = isInitiator ? session.partnerId : session.initiatorId;
     const partnerName = isInitiator ? session.partnerName : session.initiatorName;
 
-    const sessionId = await createSession(currentUser.uid, {
-      subject,
-      plannedDuration: 60,
-      partnerId,
-      partnerName,
-      coSessionId,
-      status: 'active',
-      startedAt: serverTimestamp(),
-    });
+    let sessionId;
+
+    if (isInitiator) {
+      // Sadece initiator session oluşturur — her ikisi de participants'ta
+      sessionId = await createSession(currentUser.uid, {
+        subject,
+        plannedDuration: 60,
+        partnerId,
+        partnerName,
+        coSessionId,
+        status: 'active',
+        startedAt: serverTimestamp(),
+      });
+      // sessionId'yi coSession'a yaz, partner okusun
+      const { updateDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../../services/firebase');
+      await updateDoc(doc(db, 'coSessions', coSessionId), { sessionId });
+    } else {
+      // Partner, initiator'ın oluşturduğu session ID'yi coSession'dan okur
+      sessionId = session.sessionId || null;
+    }
 
     setActiveSession({ id: sessionId, subject, duration: 60, partner: { uid: partnerId, displayName: partnerName }, coSessionId });
     timer.reset();
@@ -349,23 +361,20 @@ export default function SessionsPage() {
     if (coSessionUnsubRef.current) coSessionUnsubRef.current();
     coSessionUnsubRef.current = listenCoSession(coSessionId, async (cs) => {
       if (cs.status === 'ended') {
-        // Partner oturumu sonlandırdı
         coSessionUnsubRef.current?.();
         coSessionUnsubRef.current = null;
-        setActiveSession(prev => {
-          if (!prev) return prev;
-          // Timer'ı durdur ve rating modalını aç
-          timer.stop();
-          const mins = Math.floor(timer.secs / 60);
-          // Session'ı güncelle
-          updateSessionStatus(sessionId, 'completed', {
-            durationMinutes: cs.durationMinutes || mins,
+        timer.stop();
+        const mins = cs.durationMinutes || Math.floor(timer.secs / 60);
+        const sid = cs.sessionId || sessionId;
+        if (sid) {
+          await updateSessionStatus(sid, 'completed', {
+            durationMinutes: mins,
             endedAt: serverTimestamp(),
           });
-          setCompletedId(sessionId);
-          setShowRating(true);
-          return null;
-        });
+          setCompletedId(sid);
+        }
+        setActiveSession(null);
+        setShowRating(true);
         await loadData();
       }
     });
@@ -390,15 +399,21 @@ export default function SessionsPage() {
   const handleStop = async () => {
     timer.stop();
     const mins = Math.floor(timer.secs / 60);
-    await updateSessionStatus(activeSession.id, 'completed', {
-      durationMinutes: mins,
-      endedAt: serverTimestamp(),
-    });
-    // CoSession'ı da sonlandır
+
+    // Sadece sessionId varsa güncelle (partner'ın sessionId'si olmayabilir)
+    if (activeSession.id) {
+      await updateSessionStatus(activeSession.id, 'completed', {
+        durationMinutes: mins,
+        endedAt: serverTimestamp(),
+      });
+      setCompletedId(activeSession.id);
+    }
+
+    // coSession'ı sonlandır — diğer kullanıcı listener ile otomatik durur
     if (activeSession.coSessionId) {
       await endCoSession(activeSession.coSessionId, mins);
     }
-    setCompletedId(activeSession.id);
+
     setActiveSession(null);
     setShowRating(true);
     await loadData();
