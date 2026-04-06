@@ -73,16 +73,20 @@ const CoSessionModal = ({ partner, subject, currentUser, userDoc, onClose, onSes
   const handleSendInvite = async () => {
     setSending(true);
     try {
-      // Firestore'dan gerçek ismi çek (aynı bilgisayarda çoklu hesap sorununu önler)
+      // Her iki ismi de Firestore'dan çek (cache sorununu önler)
       const { getDoc, doc } = await import('firebase/firestore');
       const { db } = await import('../../services/firebase');
-      const mySnap = await getDoc(doc(db, 'users', currentUser.uid));
+      const [mySnap, partnerSnap] = await Promise.all([
+        getDoc(doc(db, 'users', currentUser.uid)),
+        getDoc(doc(db, 'users', partner.uid)),
+      ]);
       const myName = mySnap.data()?.displayName || currentUser.email?.split('@')[0] || 'Kullanıcı';
+      const partnerRealName = partnerSnap.data()?.displayName || partner.displayName || 'Kullanıcı';
       const result = await createCoSessionRequest({
         initiatorId: currentUser.uid,
         initiatorName: myName,
         partnerId: partner.uid,
-        partnerName: partner.displayName,
+        partnerName: partnerRealName,
         subject,
       });
       setCode(result.code);
@@ -397,11 +401,13 @@ export default function SessionsPage() {
 
     if (isInitiator) {
       // Sadece initiator session oluşturur — her ikisi de participants'ta
+      // partnerName Firestore'daki gerçek isim (session.partnerName)
+      const realPartnerName = session.partnerName || partnerName;
       sessionId = await createSession(currentUser.uid, {
         subject,
         plannedDuration: 60,
         partnerId,
-        partnerName,
+        partnerName: realPartnerName,
         coSessionId,
         status: 'active',
         startedAt: serverTimestamp(),
