@@ -21,7 +21,7 @@ const useTimer = () => {
     const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
     return `${h > 0 ? h + ':' : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
-  return { secs, running, start, stop, reset, fmt };
+  return { secs, running, start, stop, reset, fmt, setSecs };
 };
 
 // ── Rating Modal ──────────────────────────────────────────────
@@ -304,12 +304,74 @@ export default function SessionsPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { loadData(); }, [currentUser]);
+  useEffect(() => {
+    loadData();
+    if (currentUser) restoreActiveCoSession();
+  }, [currentUser]);
 
   // Cleanup coSession listener on unmount
   useEffect(() => {
     return () => { if (coSessionUnsubRef.current) coSessionUnsubRef.current(); };
   }, []);
+
+  // Sayfa yenilenince aktif coSession'ı Firestore'dan yükle
+  const restoreActiveCoSession = async () => {
+    try {
+      const { getDocs, collection, query, where } = await import('firebase/firestore');
+      const { db } = await import('../../services/firebase');
+      // Bu kullanıcının aktif coSession'ı var mı?
+      const snap = await getDocs(collection(db, 'coSessions'));
+      const active = snap.docs.find(d => {
+        const cs = d.data();
+        return cs.status === 'active' &&
+          (cs.initiatorId === currentUser.uid || cs.partnerId === currentUser.uid);
+      });
+      if (!active) return;
+      const cs = active.data();
+      const isInitiator = cs.initiatorId === currentUser.uid;
+      const partnerId = isInitiator ? cs.partnerId : cs.initiatorId;
+      const partnerName = isInitiator ? cs.partnerName : cs.initiatorName;
+
+      // Başlangıç zamanından geçen süreyi hesapla
+      const startedAt = cs.startedAt?.toDate?.() ?? new Date();
+      const elapsed = Math.floor((Date.now() - startedAt.getTime()) / 1000);
+
+      setActiveSession({
+        id: cs.sessionId || null,
+        subject: cs.subject || 'Genel Çalışma',
+        duration: 60,
+        partner: { uid: partnerId, displayName: partnerName },
+        coSessionId: active.id,
+      });
+
+      // Timer'ı geçen süreyle başlat
+      timer.reset();
+      timer.setSecs(elapsed);
+      timer.start();
+
+      // coSession listener kur
+      if (coSessionUnsubRef.current) coSessionUnsubRef.current();
+      coSessionUnsubRef.current = listenCoSession(active.id, async (csData) => {
+        if (csData.status === 'ended') {
+          coSessionUnsubRef.current?.();
+          coSessionUnsubRef.current = null;
+          timer.stop();
+          const mins = csData.durationMinutes || Math.floor(elapsed / 60);
+          const sid = csData.sessionId;
+          if (sid) {
+            await updateSessionStatus(sid, 'completed', {
+              durationMinutes: mins,
+              endedAt: serverTimestamp(),
+            });
+            setCompletedId(sid);
+          }
+          setActiveSession(null);
+          setShowRating(true);
+          await loadData();
+        }
+      });
+    } catch (e) { console.error('restoreActiveCoSession:', e); }
+  };
 
   // URL'den gelen partner bilgisi (çalışma isteği kabulünden)
   useEffect(() => {
@@ -567,7 +629,7 @@ export default function SessionsPage() {
               <div className="flex flex-col gap-3">
                 {completedSessions.map((s, i) => {
                   const date = s.createdAt?.toDate?.() ?? new Date(s.createdAt ?? 0);
-                  const isPartner = !!s.partnerName;
+                  const isPartner = !!s.partnerName && s.partnerName !== (userDoc?.displayName || '');
                   return (
                     <div key={i} className="glass-card p-4 flex items-center gap-4">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
