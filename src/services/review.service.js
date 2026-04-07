@@ -4,22 +4,17 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-// Yorum gönder — kişi başına 1 yorum
+// Yorum gönder
 export const submitReview = async ({ fromUserId, fromName, toUserId, rating, comment }) => {
-  // Daha önce bu kişiye yorum yapıldı mı?
+  // Daha önce yorum var mı? — tek field sorgu (index gerekmez)
   const existing = await getDocs(
-    query(
-      collection(db, 'reviews'),
-      where('fromUserId', '==', fromUserId),
-      where('toUserId', '==', toUserId)
-    )
+    query(collection(db, 'reviews'), where('fromUserId', '==', fromUserId))
   );
-  if (!existing.empty) return null; // Zaten yorum var
+  const alreadyReviewed = existing.docs.some(d => d.data().toUserId === toUserId);
+  if (alreadyReviewed) return null;
 
   await addDoc(collection(db, 'reviews'), {
-    fromUserId,
-    fromName,
-    toUserId,
+    fromUserId, fromName, toUserId,
     rating,
     comment: comment || '',
     createdAt: serverTimestamp(),
@@ -28,36 +23,28 @@ export const submitReview = async ({ fromUserId, fromName, toUserId, rating, com
   await recalcUserRating(toUserId);
 };
 
-// Kullanıcının aldığı yorumları getir (orderBy olmadan — index gerekmez)
+// Kullanıcının aldığı yorumları getir — tek field sorgu
 export const getUserReviews = async (userId) => {
   try {
     const snap = await getDocs(
       query(collection(db, 'reviews'), where('toUserId', '==', userId))
     );
-    const reviews = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    // Client tarafında tarihe göre sırala
-    return reviews.sort((a, b) => {
-      const ta = a.createdAt?.toMillis?.() ?? 0;
-      const tb = b.createdAt?.toMillis?.() ?? 0;
-      return tb - ta;
-    });
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
   } catch (e) {
     console.error('getUserReviews error:', e);
     return [];
   }
 };
 
-// Bu kişiye daha önce yorum yapıldı mı?
+// Daha önce yorum yapıldı mı? — tek field sorgu
 export const hasReviewedUser = async (fromUserId, toUserId) => {
   try {
     const snap = await getDocs(
-      query(
-        collection(db, 'reviews'),
-        where('fromUserId', '==', fromUserId),
-        where('toUserId', '==', toUserId)
-      )
+      query(collection(db, 'reviews'), where('fromUserId', '==', fromUserId))
     );
-    return !snap.empty;
+    return snap.docs.some(d => d.data().toUserId === toUserId);
   } catch { return false; }
 };
 

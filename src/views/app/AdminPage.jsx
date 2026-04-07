@@ -272,10 +272,12 @@ export default function AdminPage() {
         const startDate = s.startedAt?.toDate?.() ?? s.createdAt?.toDate?.() ?? null;
         const endDate = s.endedAt?.toDate?.() ?? null;
         const userId = s.participants?.[0] || '';
+        // partnerName boşsa partnerId'den bul
+        const partnerDisplay = s.partnerName || (s.partnerId ? userMap[s.partnerId]?.displayName : null) || '—';
         logRows.push([
           logNo++,
           userMap[userId]?.displayName || userId,
-          s.partnerName || '—',
+          partnerDisplay,
           s.subject || 'Genel Çalışma',
           s.coSessionId ? 'Eş Zamanlı' : 'Bireysel', // Tür
           s.status === 'completed' ? 'Tamamlandı' : 'Aktif',

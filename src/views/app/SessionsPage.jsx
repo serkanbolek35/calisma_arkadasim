@@ -635,7 +635,7 @@ export default function SessionsPage() {
               <div className="flex flex-col gap-3">
                 {completedSessions.map((s, i) => {
                   const date = s.createdAt?.toDate?.() ?? new Date(s.createdAt ?? 0);
-                  const isPartner = !!s.partnerName && s.partnerName !== (userDoc?.displayName || '');
+                  const isPartner = !!s.partnerId && s.partnerId !== currentUser?.uid;
                   return (
                     <div key={i} className="glass-card p-4 flex items-center gap-4">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
