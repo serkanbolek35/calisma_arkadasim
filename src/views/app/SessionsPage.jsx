@@ -3,7 +3,7 @@ import { Play, Square, CheckCircle2, UserCheck, KeyRound, Users } from 'lucide-r
 import { useLocation, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import { useAuth } from '../../context/AuthContext';
-import { getUserSessions, createSession, updateSessionStatus, addSessionRating } from '../../services/session.service';
+import { getUserSessions, createSession, updateSessionStatus, addSessionRating, writeLog } from '../../services/session.service';
 import { createCoSessionRequest, joinWithCode, listenCoSession, endCoSession } from '../../services/coSession.service';
 import { getMatches } from '../../services/matching.service';
 import { getUser, getUserPreferences } from '../../services/user.service';
@@ -213,7 +213,7 @@ const CodeEntryModal = ({ currentUser, userDoc, onClose, onSessionStarted }) => 
 
 // ── Plan Modal (yalnız çalışma için) ─────────────────────────
 const PlanModal = ({ subjects, onClose, onStart }) => {
-  const [form, setForm] = useState({ subject: subjects[0] || 'Genel Çalışma', duration: 25 });
+  const [form, setForm] = useState({ subject: subjects[0] || 'Genel Çalışma', duration: 25, bulusmaYeri: 'Kütüphane' });
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}>
@@ -226,6 +226,15 @@ const PlanModal = ({ subjects, onClose, onStart }) => {
             <select value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
               className="input-field" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }}>
               {subjects.map(s => <option key={s} value={s} style={{ background: '#1A1A1A' }}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-mono tracking-widest uppercase mb-1.5 block" style={{ color: 'var(--mist)' }}>Buluşma Yeri</label>
+            <select value={form.bulusmaYeri} onChange={e => setForm(f => ({ ...f, bulusmaYeri: e.target.value }))}
+              className="input-field" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }}>
+              {['Kütüphane', 'Merkez Kütüphane', 'Kafeterya', 'Öğrenci Merkezi', 'Sınıf / Derslik', 'Çevrimiçi (Zoom/Meet)', 'Diğer'].map(y => (
+                <option key={y} value={y} style={{ background: '#1A1A1A' }}>{y}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -454,12 +463,13 @@ export default function SessionsPage() {
     const id = await createSession(currentUser.uid, {
       subject: form.subject,
       plannedDuration: form.duration,
+      bulusmaYeri: form.bulusmaYeri || 'Belirtilmedi',
       partnerId: null,
       partnerName: null,
       status: 'active',
       startedAt: serverTimestamp(),
     });
-    setActiveSession({ id, subject: form.subject, duration: form.duration, partner: null });
+    setActiveSession({ id, subject: form.subject, duration: form.duration, bulusmaYeri: form.bulusmaYeri, partner: null });
     timer.reset();
     timer.start();
   };
@@ -468,7 +478,6 @@ export default function SessionsPage() {
     timer.stop();
     const mins = Math.floor(timer.secs / 60);
 
-    // Sadece sessionId varsa güncelle (partner'ın sessionId'si olmayabilir)
     if (activeSession.id) {
       await updateSessionStatus(activeSession.id, 'completed', {
         durationMinutes: mins,
@@ -477,7 +486,17 @@ export default function SessionsPage() {
       setCompletedId(activeSession.id);
     }
 
-    // coSession'ı sonlandır — diğer kullanıcı listener ile otomatik durur
+    // Log: Oturum bitti
+    await writeLog({
+      sessionId: activeSession.id,
+      kullaniciId: currentUser.uid,
+      eslesenKisiId: activeSession.partner?.uid || null,
+      islemTipi: 'Oturum_Bitti',
+      calismaKonusu: activeSession.subject,
+      toplamSure: mins,
+      bulusmaYeri: activeSession.bulusmaYeri || null,
+    });
+
     if (activeSession.coSessionId) {
       await endCoSession(activeSession.coSessionId, mins);
     }

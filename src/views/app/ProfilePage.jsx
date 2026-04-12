@@ -7,6 +7,7 @@ import { getUser } from '../../services/user.service';
 import { getUserSessions } from '../../services/session.service';
 import { getUserReviews, submitReview, hasReviewedUser } from '../../services/review.service';
 import { calcBadges } from '../../utils/badges';
+import { writeLog } from '../../services/session.service';
 import { createStudyRequest } from '../../services/studyRequest.service';
 
 const Stars = ({ value, max = 5, size = 14, interactive = false, onChange }) => (
@@ -164,6 +165,18 @@ export default function ProfilePage() {
     avg: reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0,
   };
   const badges = calcBadges(stats, reviewStats);
+
+  // Yeni kazanılan rozetleri logla (kendi profili + rozet varsa)
+  useEffect(() => {
+    if (!isOwnProfile || !currentUser || badges.length === 0) return;
+    badges.forEach(b => {
+      writeLog({
+        kullaniciId: currentUser.uid,
+        islemTipi: 'Rozet_Kazanildi',
+        calismaKonusu: b.label,
+      }).catch(() => {});
+    });
+  }, [badges.length]);
   const avgRating = profile.avgRating ?? reviewStats.avg;
   const reviewCount = profile.reviewCount ?? reviewStats.count;
 

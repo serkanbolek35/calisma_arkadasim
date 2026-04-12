@@ -146,13 +146,14 @@ export default function AdminPage() {
     try {
       // Her koleksiyonu ayrı ayrı çek — biri hata verse diğerleri etkilenmesin
       const safeGet = async (col) => { try { return await getDocs(collection(db, col)); } catch (e) { console.warn(col, 'okuma hatası:', e); return { docs: [] }; } };
-      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, contactsSnap, coSessionsSnap] = await Promise.all([
+      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, contactsSnap, coSessionsSnap, logsSnap] = await Promise.all([
         safeGet('users'),
         safeGet('sessions'),
         safeGet('matches'),
         safeGet('reviews'),
         safeGet('contacts'),
         safeGet('coSessions'),
+        safeGet('logs'),
       ]);
 
       const userMap = {};
@@ -316,7 +317,33 @@ export default function AdminPage() {
       wsCoSessions['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 10 }];
       XLSX.utils.book_append_sheet(wb, wsCoSessions, 'Eş Zamanlı Oturumlar');
 
-      // ── Sheet 7: İletişim Mesajları ──
+      // ── Sheet 7: EK-8 Uygulama Logları (Tam Format) ──
+      const ek8Rows = [[
+        'Oturum_ID', 'Kullanici_ID', 'Kullanici_Adi', 'Eslesen_Kisi_ID', 'Eslesen_Kisi_Adi',
+        'Islem_Tipi', 'Calisma_Konusu', 'Baslangic_Zamani', 'Bitis_Zamani',
+        'Toplam_Sure_dk', 'Bulusma_Yeri'
+      ]];
+      logsSnap.docs.forEach((d, i) => {
+        const l = d.data();
+        ek8Rows.push([
+          l.sessionId || '—',
+          l.kullaniciId || '',
+          userMap[l.kullaniciId]?.displayName || l.kullaniciId || '',
+          l.eslesenKisiId || '—',
+          l.eslesenKisiId ? (userMap[l.eslesenKisiId]?.displayName || l.eslesenKisiId) : '—',
+          l.islemTipi || '',
+          l.calismaKonusu || '—',
+          l.baslangicZamani ? formatDate(l.baslangicZamani) : formatDate(l.zaman),
+          l.bitisZamani ? formatDate(l.bitisZamani) : '—',
+          l.toplamSure != null ? l.toplamSure : '—',
+          l.bulusmaYeri || '—',
+        ]);
+      });
+      const wsEK8 = XLSX.utils.aoa_to_sheet(ek8Rows);
+      wsEK8['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 20 }, { wch: 24 }, { wch: 20 }, { wch: 20 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 20 }];
+      XLSX.utils.book_append_sheet(wb, wsEK8, 'EK-8 Uygulama Logları');
+
+      // ── Sheet 8: İletişim Mesajları ──
       const contactRows = [['No', 'Ad Soyad', 'E-posta', 'Konu', 'Mesaj', 'Tarih']];
       contactsSnap.docs.forEach((d, i) => {
         const c = d.data();

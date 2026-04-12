@@ -5,6 +5,7 @@ import {
 import { db } from './firebase';
 import { createNotification } from './notification.service';
 import { isRecentlyActive } from './presence.service';
+import { writeLog } from './session.service';
 
 // Eşleşme kabul edilince chat oluştur (zaten varsa oluşturma)
 const createMatchChat = async (user1Id, user2Id, matchId) => {
@@ -77,6 +78,15 @@ export const respondToMatch = async (matchId, accept, responderId = '', responde
     if (chatId) {
       await updateDoc(matchRef, { chatId });
     }
+  }
+
+  // Log: Eşleşme onaylandı
+  if (accept && matchData?.users) {
+    await writeLog({
+      kullaniciId: responderId,
+      eslesenKisiId: matchData.initiatedBy,
+      islemTipi: 'Eslesme_Onaylandi',
+    });
   }
 
   if (matchData?.initiatedBy) {

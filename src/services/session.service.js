@@ -4,6 +4,25 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
+// ── Uygulama Log Kaydı ────────────────────────────────────────
+// Her önemli eylem için logs koleksiyonuna kayıt yazar
+export const writeLog = async ({ sessionId, kullaniciId, eslesenKisiId, islemTipi, calismaKonusu, baslangicZamani, bitisZamani, toplamSure, bulusmaYeri }) => {
+  try {
+    await addDoc(collection(db, 'logs'), {
+      sessionId: sessionId || null,
+      kullaniciId,
+      eslesenKisiId: eslesenKisiId || null,
+      islemTipi,           // Oturum_Basladi | Oturum_Bitti | Eslesme_Onaylandi | Rozet_Kazanildi
+      calismaKonusu: calismaKonusu || null,
+      baslangicZamani: baslangicZamani || serverTimestamp(),
+      bitisZamani: bitisZamani || null,
+      toplamSure: toplamSure || null,   // dakika
+      bulusmaYeri: bulusmaYeri || null,
+      zaman: serverTimestamp(),
+    });
+  } catch (e) { console.error('writeLog error:', e); }
+};
+
 export const createSession = async (userId, data) => {
   const participants = data.partnerId
     ? [userId, data.partnerId]
@@ -12,9 +31,20 @@ export const createSession = async (userId, data) => {
     ...data,
     participants,
     createdAt: serverTimestamp(),
-    startedAt: serverTimestamp(), // Kesin başlangıç zamanı
+    startedAt: serverTimestamp(),
     status: data.status || 'active',
   });
+
+  // Log: Oturum başladı
+  await writeLog({
+    sessionId: ref.id,
+    kullaniciId: userId,
+    eslesenKisiId: data.partnerId || null,
+    islemTipi: 'Oturum_Basladi',
+    calismaKonusu: data.subject || 'Genel Çalışma',
+    bulusmaYeri: data.bulusmaYeri || null,
+  });
+
   return ref.id;
 };
 
@@ -48,7 +78,7 @@ export const updateSessionStatus = async (sessionId, status, extra = {}) => {
   await updateDoc(doc(db, 'sessions', sessionId), {
     status,
     ...extra,
-    endedAt: serverTimestamp(), // Kesin bitiş zamanı
+    endedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 };
@@ -61,58 +91,43 @@ export const addSessionRating = async (sessionId, userId, rating) => {
   await updateDoc(doc(db, 'sessions', sessionId), { rating });
 };
 
-// ── Gelişmiş log fonksiyonları ──────────────────────────────
-
-// Haftalık toplam süre (dakika)
+// ── Analiz fonksiyonları ──────────────────────────────────────
 export const getWeeklyTotal = (sessions) => {
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   return sessions
     .filter(s => s.status === 'completed')
-    .filter(s => {
-      const d = s.createdAt?.toDate?.() ?? new Date(s.createdAt ?? 0);
-      return d.getTime() > weekAgo;
-    })
+    .filter(s => (s.createdAt?.toDate?.() ?? new Date(s.createdAt ?? 0)).getTime() > weekAgo)
     .reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
 };
 
-// Konu bazlı oturum sayısı ve süre
 export const getSubjectStats = (sessions) => {
-  const completed = sessions.filter(s => s.status === 'completed');
   const map = {};
-  completed.forEach(s => {
+  sessions.filter(s => s.status === 'completed').forEach(s => {
     const subj = s.subject || 'Genel Çalışma';
     if (!map[subj]) map[subj] = { count: 0, totalMins: 0 };
     map[subj].count++;
     map[subj].totalMins += s.durationMinutes || 0;
   });
-  return Object.entries(map)
-    .map(([subject, v]) => ({ subject, ...v }))
-    .sort((a, b) => b.totalMins - a.totalMins);
+  return Object.entries(map).map(([subject, v]) => ({ subject, ...v })).sort((a, b) => b.totalMins - a.totalMins);
 };
 
-// Eşleşme kalitesi — aynı partnerle kaç oturum
 export const getPartnerStats = (sessions) => {
-  const completed = sessions.filter(s => s.status === 'completed' && s.partnerId);
   const map = {};
-  completed.forEach(s => {
-    const key = s.partnerId;
-    if (!map[key]) map[key] = { partnerName: s.partnerName || 'Kullanıcı', count: 0, totalMins: 0 };
-    map[key].count++;
-    map[key].totalMins += s.durationMinutes || 0;
+  sessions.filter(s => s.status === 'completed' && s.partnerId).forEach(s => {
+    if (!map[s.partnerId]) map[s.partnerId] = { partnerName: s.partnerName || 'Kullanıcı', count: 0, totalMins: 0 };
+    map[s.partnerId].count++;
+    map[s.partnerId].totalMins += s.durationMinutes || 0;
   });
   return Object.values(map).sort((a, b) => b.count - a.count);
 };
 
-// Günlük dağılım (son 7 gün)
 export const getDailyStats = (sessions) => {
   const DAYS = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const map = { Pzt: 0, Sal: 0, Çar: 0, Per: 0, Cum: 0, Cmt: 0, Paz: 0 };
-  sessions
-    .filter(s => s.status === 'completed')
-    .forEach(s => {
-      const d = s.createdAt?.toDate?.() ?? new Date(s.createdAt ?? 0);
-      if (d.getTime() > weekAgo) map[DAYS[d.getDay()]] += s.durationMinutes || 0;
-    });
+  sessions.filter(s => s.status === 'completed').forEach(s => {
+    const d = s.createdAt?.toDate?.() ?? new Date(s.createdAt ?? 0);
+    if (d.getTime() > weekAgo) map[DAYS[d.getDay()]] += s.durationMinutes || 0;
+  });
   return ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map(day => ({ day, minutes: map[day] }));
 };
