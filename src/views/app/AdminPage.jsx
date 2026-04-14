@@ -320,11 +320,15 @@ export default function AdminPage() {
       // ── Sheet 7: EK-8 Uygulama Logları (Tam Format) ──
       const ek8Rows = [[
         'Oturum_ID', 'Kullanici_ID', 'Kullanici_Adi', 'Eslesen_Kisi_ID', 'Eslesen_Kisi_Adi',
-        'Islem_Tipi', 'Calisma_Konusu', 'Baslangic_Zamani', 'Bitis_Zamani',
-        'Toplam_Sure_dk', 'Bulusma_Yeri'
+        'Islem_Tipi', 'Calisma_Konusu', 'Baslangic_Zamani', 'Bitis_Zamani', 'Toplam_Sure_dk', 'Bulusma_Yeri'
       ]];
-      logsSnap.docs.forEach((d, i) => {
-        const l = d.data();
+      // Logları zamana göre sırala
+      const sortedLogs = logsSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
+
+      sortedLogs.forEach((l, i) => {
+        const bitisZamani = l.bitisZamani ? new Date(l.bitisZamani).toLocaleString('tr-TR') : '—';
         ek8Rows.push([
           l.sessionId || '—',
           l.kullaniciId || '',
@@ -333,14 +337,14 @@ export default function AdminPage() {
           l.eslesenKisiId ? (userMap[l.eslesenKisiId]?.displayName || l.eslesenKisiId) : '—',
           l.islemTipi || '',
           l.calismaKonusu || '—',
-          l.baslangicZamani ? formatDate(l.baslangicZamani) : formatDate(l.zaman),
-          l.bitisZamani ? formatDate(l.bitisZamani) : '—',
+          formatDate(l.zaman),
+          bitisZamani,
           l.toplamSure != null ? l.toplamSure : '—',
           l.bulusmaYeri || '—',
         ]);
       });
       const wsEK8 = XLSX.utils.aoa_to_sheet(ek8Rows);
-      wsEK8['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 20 }, { wch: 24 }, { wch: 20 }, { wch: 20 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 20 }];
+      wsEK8['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 28 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, wsEK8, 'EK-8 Uygulama Logları');
 
       // ── Sheet 8: İletişim Mesajları ──

@@ -7,10 +7,24 @@ import { createStudyRequest, getOpenRequests, getMyRequests, cancelRequest, acce
 import { getUserPreferences } from '../../services/user.service';
 import { MARMARA_KAMPUSLER } from '../../data/marmara';
 
-const TIME_SLOTS = [
-  '08:00–10:00', '10:00–12:00', '12:00–14:00', '14:00–16:00',
-  '16:00–18:00', '18:00–20:00', '20:00–22:00',
-];
+// 08:00'dan 22:00'ye kadar her saat için slot üret
+const ALL_TIME_SLOTS = Array.from({ length: 14 }, (_, i) => {
+  const start = 8 + i;
+  const end = start + 1;
+  const fmt = h => `${String(h).padStart(2, '0')}:00`;
+  return fmt(start) + '–' + fmt(end);
+});
+
+// Bugün için geçmemiş slotları filtrele
+const getAvailableSlots = (selectedDate) => {
+  const today = new Date().toISOString().split('T')[0];
+  if (selectedDate !== today) return ALL_TIME_SLOTS;
+  const nowHour = new Date().getHours();
+  return ALL_TIME_SLOTS.filter(slot => {
+    const slotHour = parseInt(slot.split(':')[0]);
+    return slotHour > nowHour; // Geçmiş saatleri gizle
+  });
+};
 
 // ── Yeni İstek Modal ─────────────────────────────────────────
 const COMMON_SUBJECTS = [
@@ -26,14 +40,19 @@ const COMMON_SUBJECTS = [
 
 const NewRequestModal = ({ subjects, onClose, onSave }) => {
   const allSubjects = [...new Set([...subjects, ...COMMON_SUBJECTS])];
+  const today = new Date().toISOString().split('T')[0];
+  const nowHour = new Date().getHours();
+  // Varsayılan saat: şimdiden sonraki ilk slot
+  const defaultSlot = ALL_TIME_SLOTS.find(s => parseInt(s.split(':')[0]) > nowHour) || ALL_TIME_SLOTS[0];
   const [form, setForm] = useState({
     subject: subjects[0] || 'Genel Çalışma',
     customSubject: '',
     location: MARMARA_KAMPUSLER[0].ad,
-    date: new Date().toISOString().split('T')[0],
-    timeSlot: TIME_SLOTS[2],
+    date: today,
+    timeSlot: defaultSlot,
     note: '',
   });
+  const availableSlots = getAvailableSlots(form.date);
   const [saving, setSaving] = useState(false);
   const finalSubject = form.subject === 'Diğer' ? form.customSubject || 'Diğer' : form.subject;
 
@@ -88,15 +107,29 @@ const NewRequestModal = ({ subjects, onClose, onSave }) => {
             <div>
               <label className="text-xs font-mono tracking-widest uppercase mb-1.5 block" style={{ color: 'var(--mist)' }}>Tarih *</label>
               <input type="date" value={form.date} min={new Date().toISOString().split('T')[0]}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                onChange={e => {
+                  const newDate = e.target.value;
+                  const slots = getAvailableSlots(newDate);
+                  setForm(f => ({ ...f, date: newDate, timeSlot: slots[0] || f.timeSlot }));
+                }}
                 className="input-field" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }} />
             </div>
             <div>
               <label className="text-xs font-mono tracking-widest uppercase mb-1.5 block" style={{ color: 'var(--mist)' }}>Saat *</label>
-              <select value={form.timeSlot} onChange={e => setForm(f => ({ ...f, timeSlot: e.target.value }))}
+              <select value={form.timeSlot}
+                onChange={e => setForm(f => ({ ...f, timeSlot: e.target.value }))}
                 className="input-field" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }}>
-                {TIME_SLOTS.map(t => <option key={t} value={t} style={{ background: '#1A1A1A' }}>{t}</option>)}
+                {availableSlots.length === 0
+                  ? <option value="" style={{ background: '#1A1A1A' }}>Bugün için uygun saat kalmadı</option>
+                  : availableSlots.map(t => <option key={t} value={t} style={{ background: '#1A1A1A' }}>{t}</option>)
+                }
+                <option value="ozel" style={{ background: '#1A1A1A' }}>📝 Özel Saat Gir...</option>
               </select>
+              {form.timeSlot === 'ozel' && (
+                <input type="text" placeholder="Örn: 15:30–17:00"
+                  onChange={e => setForm(f => ({ ...f, timeSlot: e.target.value || 'ozel' }))}
+                  className="input-field mt-2" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }} />
+              )}
             </div>
           </div>
 

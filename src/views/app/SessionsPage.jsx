@@ -409,8 +409,6 @@ export default function SessionsPage() {
     let sessionId;
 
     if (isInitiator) {
-      // Sadece initiator session oluşturur — her ikisi de participants'ta
-      // partnerName Firestore'daki gerçek isim (session.partnerName)
       const realPartnerName = session.partnerName || partnerName;
       sessionId = await createSession(currentUser.uid, {
         subject,
@@ -421,32 +419,68 @@ export default function SessionsPage() {
         status: 'active',
         startedAt: serverTimestamp(),
       });
-      // sessionId'yi coSession'a yaz, partner okusun
+      // sessionId'yi coSession'a yaz
       const { updateDoc, doc } = await import('firebase/firestore');
       const { db } = await import('../../services/firebase');
       await updateDoc(doc(db, 'coSessions', coSessionId), { sessionId });
     } else {
-      // Partner, initiator'ın oluşturduğu session ID'yi coSession'dan okur
+      // Partner: sessionId gelene kadar bekle (race condition önlemi)
       sessionId = session.sessionId || null;
+      if (!sessionId) {
+        // 3 saniye bekle ve tekrar dene
+        await new Promise(r => setTimeout(r, 3000));
+        const { getDoc, doc } = await import('firebase/firestore');
+        const { db } = await import('../../services/firebase');
+        const fresh = await getDoc(doc(db, 'coSessions', coSessionId));
+        sessionId = fresh.data()?.sessionId || null;
+      }
     }
 
-    setActiveSession({ id: sessionId, subject, duration: 60, partner: { uid: partnerId, displayName: partnerName }, coSessionId });
+    const activeData = {
+      id: sessionId,
+      subject,
+      duration: 60,
+      partner: { uid: partnerId, displayName: partnerName },
+      coSessionId,
+      startTime: new Date(),
+      bulusmaYeri: null,
+    };
+
+    setActiveSession(activeData);
     timer.reset();
     timer.start();
 
-    // coSession'ı dinle — partner durdurursa bu kullanıcıda da otomatik dursun
+    // coSession dinle
     if (coSessionUnsubRef.current) coSessionUnsubRef.current();
     coSessionUnsubRef.current = listenCoSession(coSessionId, async (cs) => {
+      // sessionId güncellenince state'i de güncelle
+      if (cs.sessionId && !activeData.id) {
+        activeData.id = cs.sessionId;
+        setActiveSession(prev => prev ? { ...prev, id: cs.sessionId } : prev);
+      }
+
       if (cs.status === 'ended') {
         coSessionUnsubRef.current?.();
         coSessionUnsubRef.current = null;
         timer.stop();
         const mins = cs.durationMinutes || Math.floor(timer.secs / 60);
-        const sid = cs.sessionId || sessionId;
+        const sid = cs.sessionId || activeData.id || sessionId;
+
         if (sid) {
           await updateSessionStatus(sid, 'completed', {
             durationMinutes: mins,
             endedAt: serverTimestamp(),
+          });
+          // Partner için de log yaz
+          await writeLog({
+            sessionId: sid,
+            kullaniciId: currentUser.uid,
+            eslesenKisiId: partnerId,
+            islemTipi: 'Eslesme_Oturum_Tamamlandi',
+            calismaKonusu: subject,
+            toplamSure: mins,
+            bitisZamani: new Date().toISOString(),
+            bulusmaYeri: null,
           });
           setCompletedId(sid);
         }
@@ -469,7 +503,7 @@ export default function SessionsPage() {
       status: 'active',
       startedAt: serverTimestamp(),
     });
-    setActiveSession({ id, subject: form.subject, duration: form.duration, bulusmaYeri: form.bulusmaYeri, partner: null });
+    setActiveSession({ id, subject: form.subject, duration: form.duration, bulusmaYeri: form.bulusmaYeri || 'Belirtilmedi', partner: null, startTime: new Date() });
     timer.reset();
     timer.start();
   };
@@ -486,14 +520,15 @@ export default function SessionsPage() {
       setCompletedId(activeSession.id);
     }
 
-    // Log: Oturum bitti
+    // Log: tam oturum bilgisi
     await writeLog({
       sessionId: activeSession.id,
       kullaniciId: currentUser.uid,
       eslesenKisiId: activeSession.partner?.uid || null,
-      islemTipi: 'Oturum_Bitti',
+      islemTipi: activeSession.partner ? 'Eslesme_Oturum_Tamamlandi' : 'Bireysel_Oturum_Tamamlandi',
       calismaKonusu: activeSession.subject,
       toplamSure: mins,
+      bitisZamani: new Date().toISOString(),
       bulusmaYeri: activeSession.bulusmaYeri || null,
     });
 

@@ -6,19 +6,18 @@ import { db } from './firebase';
 
 // ── Uygulama Log Kaydı ────────────────────────────────────────
 // Her önemli eylem için logs koleksiyonuna kayıt yazar
-export const writeLog = async ({ sessionId, kullaniciId, eslesenKisiId, islemTipi, calismaKonusu, baslangicZamani, bitisZamani, toplamSure, bulusmaYeri }) => {
+export const writeLog = async ({ sessionId, kullaniciId, eslesenKisiId, islemTipi, calismaKonusu, bitisZamani, toplamSure, bulusmaYeri }) => {
   try {
     await addDoc(collection(db, 'logs'), {
       sessionId: sessionId || null,
       kullaniciId,
       eslesenKisiId: eslesenKisiId || null,
-      islemTipi,           // Oturum_Basladi | Oturum_Bitti | Eslesme_Onaylandi | Rozet_Kazanildi
+      islemTipi,
       calismaKonusu: calismaKonusu || null,
-      baslangicZamani: baslangicZamani || serverTimestamp(),
-      bitisZamani: bitisZamani || null,
-      toplamSure: toplamSure || null,   // dakika
+      bitisZamani: bitisZamani || null,   // ISO string
+      toplamSure: toplamSure ?? null,     // dakika (sayı)
       bulusmaYeri: bulusmaYeri || null,
-      zaman: serverTimestamp(),
+      zaman: serverTimestamp(),           // log yazıldığı an
     });
   } catch (e) { console.error('writeLog error:', e); }
 };
@@ -33,16 +32,6 @@ export const createSession = async (userId, data) => {
     createdAt: serverTimestamp(),
     startedAt: serverTimestamp(),
     status: data.status || 'active',
-  });
-
-  // Log: Oturum başladı
-  await writeLog({
-    sessionId: ref.id,
-    kullaniciId: userId,
-    eslesenKisiId: data.partnerId || null,
-    islemTipi: 'Oturum_Basladi',
-    calismaKonusu: data.subject || 'Genel Çalışma',
-    bulusmaYeri: data.bulusmaYeri || null,
   });
 
   return ref.id;
