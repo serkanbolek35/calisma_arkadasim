@@ -9,12 +9,16 @@ export const generateCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
 // Eş zamanlı oturum oluştur — initiator otomatik katılmış sayılır
-export const createCoSessionRequest = async ({ initiatorId, initiatorName, partnerId, partnerName, subject }) => {
+export const createCoSessionRequest = async ({
+  initiatorId, initiatorName, partnerId, partnerName, subject,
+  bulusmaYeri = null,
+}) => {
   const code = generateCode();
   const ref = await addDoc(collection(db, 'coSessions'), {
     initiatorId, initiatorName,
     partnerId, partnerName,
     subject: subject || 'Genel Çalışma',
+    bulusmaYeri: bulusmaYeri || null,
     code,
     status: 'waiting',
     initiatorJoined: true,  // initiator zaten dahil

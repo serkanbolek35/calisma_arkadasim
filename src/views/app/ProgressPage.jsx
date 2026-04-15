@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import AppLayout from '../../components/layout/AppLayout';
 import { useAuth } from '../../context/AuthContext';
-import { getUserSessions, getWeeklyTotal, getSubjectStats, getPartnerStats, getDailyStats } from '../../services/session.service';
+import { getUserSessions, getWeeklyTotal, getSubjectStats, getPartnerStats, getDailyStats, enrichSessionsForViewer } from '../../services/session.service';
 import { getMatches } from '../../services/matching.service';
 
 const Tip = ({ active, payload, label }) => {
@@ -31,7 +31,11 @@ export default function ProgressPage() {
   useEffect(() => {
     if (!currentUser) return;
     Promise.all([getUserSessions(currentUser.uid, 100), getMatches(currentUser.uid)])
-      .then(([s, m]) => { setSessions(s); setMatches(m); })
+      .then(async ([s, m]) => {
+        const enriched = await enrichSessionsForViewer(currentUser.uid, s);
+        setSessions(enriched);
+        setMatches(m);
+      })
       .finally(() => setLoading(false));
   }, [currentUser]);
 

@@ -7,23 +7,74 @@ import { createStudyRequest, getOpenRequests, getMyRequests, cancelRequest, acce
 import { getUserPreferences } from '../../services/user.service';
 import { MARMARA_KAMPUSLER } from '../../data/marmara';
 
-// 08:00'dan 22:00'ye kadar her saat için slot üret
+/** <input type="date"> ile uyumlu yerel takvim tarihi YYYY-MM-DD */
+const toLocalDateString = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const EN_DASH = '–';
+
+// 08:00'dan 22:00'ye kadar her saat için slot üret (Firebase ile aynı: en tire)
 const ALL_TIME_SLOTS = Array.from({ length: 14 }, (_, i) => {
   const start = 8 + i;
   const end = start + 1;
   const fmt = h => `${String(h).padStart(2, '0')}:00`;
-  return fmt(start) + '–' + fmt(end);
+  return fmt(start) + EN_DASH + fmt(end);
 });
 
-// Bugün için geçmemiş slotları filtrele
+// Bugün için geçmemiş slotları filtrele (yerel tarih)
 const getAvailableSlots = (selectedDate) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
   if (selectedDate !== today) return ALL_TIME_SLOTS;
   const nowHour = new Date().getHours();
   return ALL_TIME_SLOTS.filter(slot => {
-    const slotHour = parseInt(slot.split(':')[0]);
-    return slotHour > nowHour; // Geçmiş saatleri gizle
+    const slotHour = parseInt(slot.split(':')[0], 10);
+    return slotHour > nowHour;
   });
+};
+
+/** Özel aralığı HH:MM–HH:MM (en tire) olarak doğrula / normalize et */
+const parseAndNormalizeCustomTimeSlot = (raw) => {
+  const s = String(raw ?? '').trim();
+  if (!s) return { ok: false, error: 'Özel saat aralığını girin.' };
+  const parts = s.split(/\s*(?:-|–|—)\s*/);
+  if (parts.length !== 2) {
+    return { ok: false, error: `Format: 20:00${EN_DASH}22:00 (başlangıç ve bitiş)` };
+  }
+  const parseHm = (t) => {
+    const m = String(t).trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+    return h * 60 + min;
+  };
+  const startM = parseHm(parts[0]);
+  const endM = parseHm(parts[1]);
+  if (startM === null || endM === null) {
+    return { ok: false, error: 'Saatler 00:00–23:59 aralığında HH:MM olmalı.' };
+  }
+  if (endM <= startM) {
+    return { ok: false, error: 'Bitiş saati başlangıçtan sonra olmalı.' };
+  }
+  const fmt = (mins) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+  return { ok: true, normalized: `${fmt(startM)}${EN_DASH}${fmt(endM)}` };
+};
+
+/** Seçilen gün bugünse, aralığın başlangıcı şu ana göre geçmiş mi? */
+const isCustomRangeStartInPast = (dateStr, normalizedSlot, now = new Date()) => {
+  if (dateStr !== toLocalDateString(now)) return false;
+  const startPart = normalizedSlot.split(EN_DASH)[0];
+  const [hh, mm] = startPart.split(':').map((x) => parseInt(x, 10));
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0);
+  return start.getTime() < now.getTime();
 };
 
 // ── Yeni İstek Modal ─────────────────────────────────────────
@@ -40,10 +91,10 @@ const COMMON_SUBJECTS = [
 
 const NewRequestModal = ({ subjects, onClose, onSave }) => {
   const allSubjects = [...new Set([...subjects, ...COMMON_SUBJECTS])];
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
   const nowHour = new Date().getHours();
   // Varsayılan saat: şimdiden sonraki ilk slot
-  const defaultSlot = ALL_TIME_SLOTS.find(s => parseInt(s.split(':')[0]) > nowHour) || ALL_TIME_SLOTS[0];
+  const defaultSlot = ALL_TIME_SLOTS.find(s => parseInt(s.split(':')[0], 10) > nowHour) || ALL_TIME_SLOTS[0];
   const [form, setForm] = useState({
     subject: subjects[0] || 'Genel Çalışma',
     customSubject: '',
@@ -53,13 +104,44 @@ const NewRequestModal = ({ subjects, onClose, onSave }) => {
     note: '',
   });
   const availableSlots = getAvailableSlots(form.date);
+  const [useCustomTime, setUseCustomTime] = useState(false);
+  const [customTimeInput, setCustomTimeInput] = useState('');
+  const [timeSlotError, setTimeSlotError] = useState('');
   const [saving, setSaving] = useState(false);
   const finalSubject = form.subject === 'Diğer' ? form.customSubject || 'Diğer' : form.subject;
 
   const handleSave = async () => {
     if (!finalSubject.trim()) return;
+
+    let timeSlotToSave = form.timeSlot;
+    if (useCustomTime) {
+      const parsed = parseAndNormalizeCustomTimeSlot(customTimeInput);
+      if (!parsed.ok) {
+        setTimeSlotError(parsed.error);
+        return;
+      }
+      if (isCustomRangeStartInPast(form.date, parsed.normalized)) {
+        setTimeSlotError('Bugün için geçmiş bir saat aralığı giremezsiniz.');
+        return;
+      }
+      timeSlotToSave = parsed.normalized;
+    } else {
+      if (!form.timeSlot?.trim()) {
+        setTimeSlotError('Uygun bir saat seçin.');
+        return;
+      }
+      const presetParsed = parseAndNormalizeCustomTimeSlot(form.timeSlot);
+      const normalizedPreset = presetParsed.ok ? presetParsed.normalized : form.timeSlot;
+      if (presetParsed.ok && isCustomRangeStartInPast(form.date, normalizedPreset)) {
+        setTimeSlotError('Bu saat aralığı artık geçmiş. Lütfen başka bir saat seçin.');
+        return;
+      }
+      timeSlotToSave = normalizedPreset;
+    }
+
     setSaving(true);
-    await onSave({ ...form, subject: finalSubject });
+    setTimeSlotError('');
+    await onSave({ ...form, subject: finalSubject, timeSlot: timeSlotToSave });
     setSaving(false);
   };
 
@@ -106,18 +188,33 @@ const NewRequestModal = ({ subjects, onClose, onSave }) => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-mono tracking-widest uppercase mb-1.5 block" style={{ color: 'var(--mist)' }}>Tarih *</label>
-              <input type="date" value={form.date} min={new Date().toISOString().split('T')[0]}
+              <input type="date" value={form.date} min={toLocalDateString()}
                 onChange={e => {
                   const newDate = e.target.value;
                   const slots = getAvailableSlots(newDate);
+                  setUseCustomTime(false);
+                  setCustomTimeInput('');
+                  setTimeSlotError('');
                   setForm(f => ({ ...f, date: newDate, timeSlot: slots[0] || f.timeSlot }));
                 }}
                 className="input-field" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }} />
             </div>
             <div>
               <label className="text-xs font-mono tracking-widest uppercase mb-1.5 block" style={{ color: 'var(--mist)' }}>Saat *</label>
-              <select value={form.timeSlot}
-                onChange={e => setForm(f => ({ ...f, timeSlot: e.target.value }))}
+              <select
+                value={useCustomTime ? 'ozel' : form.timeSlot}
+                onChange={e => {
+                  const v = e.target.value;
+                  setTimeSlotError('');
+                  if (v === 'ozel') {
+                    setUseCustomTime(true);
+                    setCustomTimeInput('');
+                  } else {
+                    setUseCustomTime(false);
+                    setCustomTimeInput('');
+                    setForm(f => ({ ...f, timeSlot: v }));
+                  }
+                }}
                 className="input-field" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }}>
                 {availableSlots.length === 0
                   ? <option value="" style={{ background: '#1A1A1A' }}>Bugün için uygun saat kalmadı</option>
@@ -125,10 +222,21 @@ const NewRequestModal = ({ subjects, onClose, onSave }) => {
                 }
                 <option value="ozel" style={{ background: '#1A1A1A' }}>📝 Özel Saat Gir...</option>
               </select>
-              {form.timeSlot === 'ozel' && (
-                <input type="text" placeholder="Örn: 15:30–17:00"
-                  onChange={e => setForm(f => ({ ...f, timeSlot: e.target.value || 'ozel' }))}
-                  className="input-field mt-2" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }} />
+              {useCustomTime && (
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={customTimeInput}
+                    onChange={e => {
+                      setCustomTimeInput(e.target.value);
+                      setTimeSlotError('');
+                    }}
+                    placeholder="Örn: 15:30-20:00"
+                    className="input-field w-full" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }} />
+                </div>
+              )}
+              {timeSlotError && (
+                <p className="text-xs mt-1.5" style={{ color: '#E87070' }}>{timeSlotError}</p>
               )}
             </div>
           </div>

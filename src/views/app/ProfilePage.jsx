@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Star, BookOpen, MapPin, Award, ArrowLeft, Info, MessageSquare, Send } from 'lucide-react';
 import AppLayout from '../../components/layout/AppLayout';
@@ -95,12 +95,42 @@ export default function ProfilePage() {
       setStats({ total: completed.length, partner: completed.filter(s => s.partnerId).length, totalMins, avgFocus, avgProd });
 
       // Yorum yapabilir mi? (kendi profili değilse ve daha önce yorum yapmamışsa)
-      if (!isOwnProfile && currentUser) {
+      const own = targetUid === currentUser?.uid;
+      if (!own && currentUser) {
         const already = await hasReviewedUser(currentUser.uid, targetUid);
         setCanReview(!already);
       }
     }).finally(() => setLoading(false));
-  }, [targetUid]);
+  }, [targetUid, currentUser?.uid]);
+
+  const reviewStats = useMemo(() => ({
+    count: reviews.length,
+    avg: reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0,
+  }), [reviews]);
+
+  const badges = useMemo(() => {
+    if (!profile) return [];
+    return calcBadges(stats, reviewStats);
+  }, [profile, stats, reviewStats]);
+
+  const earnedBadgeIds = useMemo(
+    () => [...badges].map(b => b.id).sort().join(','),
+    [badges],
+  );
+
+  // Erken return'lerden önce — önceki sürümde burası return'lerden sonraydı (hook sırası bozuluyordu)
+  useEffect(() => {
+    if (loading || !profile || !currentUser?.uid) return;
+    if (targetUid !== currentUser.uid) return;
+    if (!earnedBadgeIds) return;
+    badges.forEach(b => {
+      writeLog({
+        kullaniciId: currentUser.uid,
+        islemTipi: 'Rozet_Kazanildi',
+        calismaKonusu: b.label,
+      }).catch(() => {});
+    });
+  }, [loading, profile, currentUser?.uid, targetUid, earnedBadgeIds, badges]);
 
   const handleSubmitReview = async () => {
     if (!canReview) return;
@@ -160,23 +190,7 @@ export default function ProfilePage() {
   const [bgColor, textColor] = getAvatarColor(profile.displayName);
   const initial = profile.displayName?.charAt(0)?.toUpperCase() || '?';
   const subjects = profile.subjects || profile.preferences?.subjects || [];
-  const reviewStats = {
-    count: reviews.length,
-    avg: reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0,
-  };
-  const badges = calcBadges(stats, reviewStats);
 
-  // Yeni kazanılan rozetleri logla (kendi profili + rozet varsa)
-  useEffect(() => {
-    if (!isOwnProfile || !currentUser || badges.length === 0) return;
-    badges.forEach(b => {
-      writeLog({
-        kullaniciId: currentUser.uid,
-        islemTipi: 'Rozet_Kazanildi',
-        calismaKonusu: b.label,
-      }).catch(() => {});
-    });
-  }, [badges.length]);
   const avgRating = profile.avgRating ?? reviewStats.avg;
   const reviewCount = profile.reviewCount ?? reviewStats.count;
 

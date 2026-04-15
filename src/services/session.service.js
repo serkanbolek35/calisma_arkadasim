@@ -3,6 +3,27 @@ import {
   query, where, orderBy, limit, serverTimestamp, setDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { getUser } from './user.service';
+
+/** Ortak oturumda oturumu görüntüleyen kullanıcı için karşı tarafın uid + displayName (DB'deki partnerId her zaman davet edilen olabiliyor) */
+export const enrichSessionPartnerForViewer = async (viewerUid, session) => {
+  const parts = (session.participants || []).filter(Boolean);
+  let otherId = parts.length >= 2 ? parts.find((id) => id !== viewerUid) : null;
+  if (!otherId && session.partnerId && session.partnerId !== viewerUid) {
+    otherId = session.partnerId;
+  }
+  if (!otherId) return session;
+  try {
+    const other = await getUser(otherId);
+    if (other?.displayName) {
+      return { ...session, partnerId: otherId, partnerName: other.displayName };
+    }
+  } catch (_) { /* ignore */ }
+  return session;
+};
+
+export const enrichSessionsForViewer = async (viewerUid, sessions) =>
+  Promise.all(sessions.map((s) => enrichSessionPartnerForViewer(viewerUid, s)));
 
 // ── Uygulama Log Kaydı ────────────────────────────────────────
 // Her önemli eylem için logs koleksiyonuna kayıt yazar

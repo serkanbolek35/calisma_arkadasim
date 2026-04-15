@@ -297,7 +297,7 @@ export default function AdminPage() {
       XLSX.utils.book_append_sheet(wb, wsLogs, 'Uygulama Logları');
 
       // ── Sheet 6: Eş Zamanlı Oturumlar ──
-      const coRows = [['No', 'Başlatan', 'Partner', 'Ders', 'Kod', 'Durum', 'Oluşturulma', 'Başlangıç', 'Bitiş', 'Süre (dk)']];
+      const coRows = [['No', 'Başlatan', 'Partner', 'Ders', 'Buluşma yeri', 'Kod', 'Durum', 'Oluşturulma', 'Başlangıç', 'Bitiş', 'Süre (dk)']];
       coSessionsSnap.docs.forEach((d, i) => {
         const c = d.data();
         coRows.push([
@@ -305,6 +305,7 @@ export default function AdminPage() {
           c.initiatorName || '',
           c.partnerName || '',
           c.subject || '',
+          c.bulusmaYeri || (c.initiatorId ? (userMap[c.initiatorId]?.campusName || '') : '') || '—',
           c.code || '',
           c.status === 'active' ? 'Aktif' : c.status === 'ended' ? 'Tamamlandı' : 'Bekliyor',
           formatDate(c.createdAt),
@@ -314,7 +315,7 @@ export default function AdminPage() {
         ]);
       });
       const wsCoSessions = XLSX.utils.aoa_to_sheet(coRows);
-      wsCoSessions['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 10 }];
+      wsCoSessions['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 22 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 10 }];
       XLSX.utils.book_append_sheet(wb, wsCoSessions, 'Eş Zamanlı Oturumlar');
 
       // ── Sheet 7: EK-8 Uygulama Logları (Tam Format) ──
@@ -322,6 +323,28 @@ export default function AdminPage() {
         'Oturum_ID', 'Kullanici_ID', 'Kullanici_Adi', 'Eslesen_Kisi_ID', 'Eslesen_Kisi_Adi',
         'Islem_Tipi', 'Calisma_Konusu', 'Baslangic_Zamani', 'Bitis_Zamani', 'Toplam_Sure_dk', 'Bulusma_Yeri'
       ]];
+      const sessionById = {};
+      sessionsSnap.docs.forEach((d) => { sessionById[d.id] = d.data(); });
+      const coSessionById = {};
+      coSessionsSnap.docs.forEach((d) => { coSessionById[d.id] = d.data(); });
+
+      const resolveBulusmaYeri = (log) => {
+        const trim = (v) => (v != null && String(v).trim() !== '' ? String(v).trim() : '');
+        const fromLog = trim(log.bulusmaYeri);
+        if (fromLog) return fromLog;
+        const sess = log.sessionId ? sessionById[log.sessionId] : null;
+        const fromSession = trim(sess?.bulusmaYeri);
+        if (fromSession) return fromSession;
+        const co = sess?.coSessionId ? coSessionById[sess.coSessionId] : null;
+        const fromCo = trim(co?.bulusmaYeri);
+        if (fromCo) return fromCo;
+        const initiatorId = co?.initiatorId || sess?.participants?.[0];
+        const campus = initiatorId ? trim(userMap[initiatorId]?.campusName) : '';
+        if (campus) return campus;
+        if (sess?.coSessionId) return 'Eş zamanlı (yer kaydı yok)';
+        return '—';
+      };
+
       // Logları zamana göre sırala
       const sortedLogs = logsSnap.docs
         .map(d => ({ id: d.id, ...d.data() }))
@@ -340,7 +363,7 @@ export default function AdminPage() {
           formatDate(l.zaman),
           bitisZamani,
           l.toplamSure != null ? l.toplamSure : '—',
-          l.bulusmaYeri || '—',
+          resolveBulusmaYeri(l),
         ]);
       });
       const wsEK8 = XLSX.utils.aoa_to_sheet(ek8Rows);

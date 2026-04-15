@@ -3,7 +3,7 @@ import { Play, Square, CheckCircle2, UserCheck, KeyRound, Users } from 'lucide-r
 import { useLocation, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import { useAuth } from '../../context/AuthContext';
-import { getUserSessions, createSession, updateSessionStatus, addSessionRating, writeLog } from '../../services/session.service';
+import { getUserSessions, createSession, updateSessionStatus, addSessionRating, writeLog, enrichSessionsForViewer } from '../../services/session.service';
 import { createCoSessionRequest, joinWithCode, listenCoSession, endCoSession } from '../../services/coSession.service';
 import { getMatches } from '../../services/matching.service';
 import { getUser, getUserPreferences } from '../../services/user.service';
@@ -60,6 +60,8 @@ const RatingModal = ({ onSubmit, onSkip }) => {
   );
 };
 
+const CO_MEETING_PLACES = ['Kütüphane', 'Merkez Kütüphane', 'Kafeterya', 'Öğrenci Merkezi', 'Sınıf / Derslik', 'Çevrimiçi (Zoom/Meet)', 'Diğer'];
+
 // ── Eş Zamanlı Oturum Modalı ──────────────────────────────────
 const CoSessionModal = ({ partner, subject, currentUser, userDoc, onClose, onSessionStarted }) => {
   const [phase, setPhase] = useState('invite'); // invite | waiting | code_entry | active
@@ -68,6 +70,11 @@ const CoSessionModal = ({ partner, subject, currentUser, userDoc, onClose, onSes
   const [coSessionId, setCoSessionId] = useState(null);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const [bulusmaYeri, setBulusmaYeri] = useState(() => {
+    const c = userDoc?.campusName?.trim();
+    if (c) return c;
+    return 'Kütüphane';
+  });
   const unsubRef = useRef(null);
 
   const handleSendInvite = async () => {
@@ -88,6 +95,7 @@ const CoSessionModal = ({ partner, subject, currentUser, userDoc, onClose, onSes
         partnerId: partner.uid,
         partnerName: partnerRealName,
         subject,
+        bulusmaYeri: bulusmaYeri || null,
       });
       setCode(result.code);
       setCoSessionId(result.id);
@@ -130,9 +138,21 @@ const CoSessionModal = ({ partner, subject, currentUser, userDoc, onClose, onSes
                 <p className="text-xs" style={{ color: 'var(--mist)' }}>{subject}</p>
               </div>
             </div>
-            <p className="text-sm mb-6" style={{ color: 'var(--mist)' }}>
+            <p className="text-sm mb-4" style={{ color: 'var(--mist)' }}>
               Davet gönderilir ve her ikinize 6 haneli bir kod verilir. İkisinin de kodu girmesi ile oturum başlar.
             </p>
+            <div className="mb-5">
+              <label className="text-xs font-mono tracking-widest uppercase mb-1.5 block" style={{ color: 'var(--mist)' }}>Buluşma yeri</label>
+              <select value={bulusmaYeri} onChange={e => setBulusmaYeri(e.target.value)}
+                className="input-field w-full" style={{ background: 'rgba(245,237,216,0.06)', color: 'var(--cream)' }}>
+                {userDoc?.campusName?.trim() && !CO_MEETING_PLACES.includes(userDoc.campusName.trim()) && (
+                  <option value={userDoc.campusName.trim()} style={{ background: '#1A1A1A' }}>Profil: {userDoc.campusName.trim()}</option>
+                )}
+                {CO_MEETING_PLACES.map(y => (
+                  <option key={y} value={y} style={{ background: '#1A1A1A' }}>{y}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex gap-3">
               <button onClick={handleSendInvite} disabled={sending} className="btn-primary flex-1 py-3 flex items-center justify-center gap-2">
                 {sending ? <span className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" /> : <><Users size={15} /> Davet Gönder</>}
@@ -287,18 +307,8 @@ export default function SessionsPage() {
         getUserPreferences(currentUser.uid),
       ]);
 
-      // Oturumlardaki partner isimlerini Firestore'dan doğrula
-      const fixedSessions = await Promise.all(sessionList.map(async (s) => {
-        if (s.partnerId && s.partnerId !== currentUser.uid) {
-          try {
-            const partnerDoc = await getUser(s.partnerId);
-            if (partnerDoc?.displayName) {
-              return { ...s, partnerName: partnerDoc.displayName };
-            }
-          } catch (_) {}
-        }
-        return s;
-      }));
+      // Ortak oturumda partnerId alanı davet edilen kişiyi tutuyor; katılan tarafta "ben" olduğu için isim çözümü participants üzerinden
+      const fixedSessions = await enrichSessionsForViewer(currentUser.uid, sessionList);
 
       setSessions(fixedSessions);
       setMySubjects(prefs?.subjects?.length > 0 ? prefs.subjects : ['Genel Çalışma']);
@@ -355,6 +365,7 @@ export default function SessionsPage() {
         duration: 60,
         partner: { uid: partnerId, displayName: partnerName },
         coSessionId: active.id,
+        bulusmaYeri: cs.bulusmaYeri || null,
       });
 
       // Timer'ı geçen süreyle başlat
@@ -405,6 +416,9 @@ export default function SessionsPage() {
     const isInitiator = session.initiatorId === currentUser.uid;
     const partnerId = isInitiator ? session.partnerId : session.initiatorId;
     const partnerName = isInitiator ? session.partnerName : session.initiatorName;
+    const meetingPlace = (session.bulusmaYeri != null && String(session.bulusmaYeri).trim() !== '')
+      ? String(session.bulusmaYeri).trim()
+      : (userDoc?.campusName && String(userDoc.campusName).trim()) || 'Belirtilmedi';
 
     let sessionId;
 
@@ -416,6 +430,7 @@ export default function SessionsPage() {
         partnerId,
         partnerName: realPartnerName,
         coSessionId,
+        bulusmaYeri: meetingPlace,
         status: 'active',
         startedAt: serverTimestamp(),
       });
@@ -443,7 +458,7 @@ export default function SessionsPage() {
       partner: { uid: partnerId, displayName: partnerName },
       coSessionId,
       startTime: new Date(),
-      bulusmaYeri: null,
+      bulusmaYeri: meetingPlace,
     };
 
     setActiveSession(activeData);
@@ -480,7 +495,7 @@ export default function SessionsPage() {
             calismaKonusu: subject,
             toplamSure: mins,
             bitisZamani: new Date().toISOString(),
-            bulusmaYeri: null,
+            bulusmaYeri: cs.bulusmaYeri ?? null,
           });
           setCompletedId(sid);
         }
@@ -689,7 +704,7 @@ export default function SessionsPage() {
               <div className="flex flex-col gap-3">
                 {completedSessions.map((s, i) => {
                   const date = s.createdAt?.toDate?.() ?? new Date(s.createdAt ?? 0);
-                  const isPartner = !!s.partnerId && s.partnerId !== currentUser?.uid;
+                  const isPartner = (s.participants?.filter(Boolean).length ?? 0) >= 2;
                   return (
                     <div key={i} className="glass-card p-4 flex items-center gap-4">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
