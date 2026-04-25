@@ -37,11 +37,21 @@ const Spinner = () => (
   </div>
 );
 
+const BYPASS_EMAILS = [
+  'bilgekaancaliskan@marun.edu.tr',
+  'aysenuygur@marun.edu.tr',
+  'mehmetyilmaz@marun.edu.tr',
+  'zeynepkaya@marun.edu.tr',
+  'aliozturk@marun.edu.tr',
+  'fadimecelik@marun.edu.tr',
+];
+
 const ProtectedRoute = ({ children, requireOnboarding = true }) => {
   const { currentUser, isOnboardingComplete, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!currentUser) return <Navigate to="/giris" replace />;
-  if (!currentUser.emailVerified) return <Navigate to="/email-dogrula" replace />;
+  const isBypassed = BYPASS_EMAILS.includes(currentUser.email);
+  if (!currentUser.emailVerified && !isBypassed) return <Navigate to="/email-dogrula" replace />;
   if (requireOnboarding && !isOnboardingComplete) return <Navigate to="/onboarding" replace />;
   return children;
 };
@@ -50,7 +60,8 @@ const AuthRoute = ({ children }) => {
   const { currentUser, isOnboardingComplete, loading } = useAuth();
   if (loading) return <Spinner />;
   if (currentUser) {
-    if (!currentUser.emailVerified) return <Navigate to="/email-dogrula" replace />;
+    const isBypassed = BYPASS_EMAILS.includes(currentUser.email);
+    if (!currentUser.emailVerified && !isBypassed) return <Navigate to="/email-dogrula" replace />;
     if (!isOnboardingComplete) return <Navigate to="/onboarding" replace />;
     return <Navigate to="/dashboard" replace />;
   }
