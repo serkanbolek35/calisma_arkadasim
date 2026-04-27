@@ -44,6 +44,14 @@ const BYPASS_EMAILS = [
   'zeynepkaya@marun.edu.tr',
   'aliozturk@marun.edu.tr',
   'fadimecelik@marun.edu.tr',
+  'emirhandemir@marun.edu.tr',
+  'busraozdemir@marun.edu.tr',
+  'mustafaarslan@marun.edu.tr',
+  'elifkaraca@marun.edu.tr',
+  'yusufattila@marun.edu.tr',
+  'serapyildiz@marun.edu.tr',
+  'okanpolat@marun.edu.tr',
+  'nazlicaglayan@marun.edu.tr',
 ];
 
 const ProtectedRoute = ({ children, requireOnboarding = true }) => {
