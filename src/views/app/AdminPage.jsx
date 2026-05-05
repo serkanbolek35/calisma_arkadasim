@@ -58,6 +58,7 @@ export default function AdminPage() {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
+  const [surveyUsers, setSurveyUsers] = useState([]);
 
   const isAdmin = ADMIN_UIDS.includes(currentUser?.uid);
 
@@ -94,6 +95,20 @@ export default function AdminPage() {
           }
         });
       });
+      // Anket dolduran kullanıcıları çek
+      const userMap2 = {};
+      usersSnap.docs.forEach(d => {
+        const data = d.data();
+        const isim = data.displayName?.trim() || data.email?.split('@')[0] || d.id.substring(0, 8);
+        userMap2[d.id] = { isim, email: data.email || '', uid: d.id };
+      });
+      const surveyUserList = surveysSnap.docs.map(d => {
+        const u = userMap2[d.id] || { isim: `(${d.id.substring(0, 8)})`, email: '', uid: d.id };
+        const completed = d.data().completed || {};
+        return { ...u, completedKeys: Object.keys(completed) };
+      });
+      setSurveyUsers(surveyUserList);
+
       setStats({
         totalUsers: usersSnap.size,
         totalSurveys: surveysSnap.size,
@@ -116,10 +131,23 @@ export default function AdminPage() {
         getDocs(collection(db, 'surveys')),
         getDocs(collection(db, 'users')),
       ]);
+      // Debug — tarayıcı konsolunda kaç kayıt çekildiğini görmek için
+      console.log('[Admin] surveys koleksiyonu: ' + surveysSnap.size + ' kayıt');
+      console.log('[Admin] users koleksiyonu: ' + usersSnap.size + ' kayıt');
+      surveysSnap.docs.forEach(d => {
+        const completed = d.data().completed || {};
+        console.log('  survey uid=' + d.id + ' | completed keys:', Object.keys(completed));
+      });
+
       const userMap = {};
       usersSnap.docs.forEach(d => {
         const data = d.data();
-        userMap[d.id] = { isim: data.displayName || 'Bilinmiyor', email: data.email || '', fakulte: data.faculty || '', bolum: data.department || '' };
+        const isim = data.displayName && data.displayName.trim()
+          ? data.displayName.trim()
+          : data.email
+            ? data.email.split('@')[0]
+            : d.id.substring(0, 8);
+        userMap[d.id] = { isim, email: data.email || '', fakulte: data.faculty || '', bolum: data.department || '' };
       });
       const wb = XLSX.utils.book_new();
       const surveysToExport = surveyId ? { [surveyId]: SURVEYS[surveyId] } : SURVEYS;
@@ -137,7 +165,7 @@ export default function AdminPage() {
             const data = doc.data();
             // Hem yeni anahtar (key) hem de tamamlandı bayrağını kontrol et
             if (!data[key] || !data.completed?.[key]) return;
-            const user = userMap[doc.id] || { isim: doc.id, email: '', fakulte: '', bolum: '' };
+            const user = userMap[doc.id] || { isim: `Kullanıcı (${doc.id.substring(0, 8)})`, email: '', fakulte: '', bolum: '' };
             const row = [rowNo++, user.isim, user.email, user.fakulte, user.bolum];
             for (let i = 0; i < survey.questions.length; i++) row.push(data[key][i] ?? '');
             rows.push(row);
@@ -518,6 +546,31 @@ export default function AdminPage() {
             ))}
           </div>
         </div>
+
+        {/* Anket Katılımcıları Listesi */}
+        {surveyUsers.length > 0 && (
+          <div className="glass-card p-5">
+            <p className="section-label mb-1">Anket Katılımcıları</p>
+            <p className="text-xs mb-4" style={{ color: 'var(--mist)' }}>
+              {surveyUsers.length} kullanıcı kayıtlı — İstatistik yenilendikten sonra güncellenir
+            </p>
+            <div className="flex flex-col gap-2">
+              {surveyUsers.map((u, i) => (
+                <div key={u.uid} className="flex items-center justify-between p-3 rounded-xl"
+                  style={{ background: 'rgba(245,237,216,0.03)', border: '1px solid rgba(245,237,216,0.06)' }}>
+                  <div>
+                    <p className="text-sm font-medium text-cream">{i + 1}. {u.isim}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--mist)' }}>{u.email}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs" style={{ color: 'var(--amber)' }}>{u.completedKeys.length} ölçek</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--mist)' }}>{u.completedKeys.join(', ') || '—'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
     </AppLayout>
