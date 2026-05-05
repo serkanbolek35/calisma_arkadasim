@@ -142,12 +142,17 @@ export default function AdminPage() {
       const userMap = {};
       usersSnap.docs.forEach(d => {
         const data = d.data();
-        const isim = data.displayName && data.displayName.trim()
+        // displayName yoksa email prefix kullan, o da yoksa uid'den al
+        const isim = (data.displayName && data.displayName.trim())
           ? data.displayName.trim()
-          : data.email
-            ? data.email.split('@')[0]
-            : d.id.substring(0, 8);
+          : (data.email ? data.email.split('@')[0] : d.id.substring(0, 8));
         userMap[d.id] = { isim, email: data.email || '', fakulte: data.faculty || '', bolum: data.department || '' };
+      });
+      // surveys koleksiyonundaki uid'ler userMap'te yoksa uid'yi key olarak ekle
+      surveysSnap.docs.forEach(d => {
+        if (!userMap[d.id]) {
+          userMap[d.id] = { isim: `Kullanıcı_${d.id.substring(0,8)}`, email: '', fakulte: '', bolum: '' };
+        }
       });
       const wb = XLSX.utils.book_new();
       const surveysToExport = surveyId ? { [surveyId]: SURVEYS[surveyId] } : SURVEYS;
@@ -201,6 +206,55 @@ export default function AdminPage() {
       }
 
       XLSX.writeFile(wb, surveyId ? `${SURVEYS[surveyId].label}_${new Date().toISOString().split('T')[0]}.xlsx` : `anket_sonuclari_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  // ── Anonimleştirilmiş Anket Excel ──
+  const downloadSurveyExcelAnon = async (surveyId = null) => {
+    setLoading(true);
+    try {
+      const [surveysSnap, usersSnap] = await Promise.all([
+        getDocs(collection(db, 'surveys')),
+        getDocs(collection(db, 'users')),
+      ]);
+      const userMap = {};
+      usersSnap.docs.forEach(d => { userMap[d.id] = d.data(); });
+
+      // Her kullanıcıya anonim ID ver
+      const anonMap = {};
+      let anonCounter = 1;
+      surveysSnap.docs.forEach(d => {
+        anonMap[d.id] = `Katilimci_${String(anonCounter++).padStart(3, '0')}`;
+      });
+
+      const wb = XLSX.utils.book_new();
+      const surveysToExport = surveyId ? { [surveyId]: SURVEYS[surveyId] } : SURVEYS;
+
+      for (const [id, survey] of Object.entries(surveysToExport)) {
+        const variants = survey.prepost
+          ? [{ key: `${id}_pre`, label: `${survey.label} (Ön Test)` }, { key: `${id}_post`, label: `${survey.label} (Son Test)` }]
+          : [{ key: id, label: survey.label }];
+        for (const { key, label } of variants) {
+          const rows = [['No', 'Katılımcı_ID', 'Fakülte', 'Bölüm', ...survey.questions.map((q, i) => `S${i + 1}: ${q}`)]];
+          let rowNo = 1;
+          surveysSnap.docs.forEach(doc => {
+            const data = doc.data();
+            if (!data[key] || !data.completed?.[key]) return;
+            const uData = userMap[doc.id] || {};
+            const row = [rowNo++, anonMap[doc.id], uData.faculty || '', uData.department || ''];
+            for (let i = 0; i < survey.questions.length; i++) row.push(data[key][i] ?? '');
+            rows.push(row);
+          });
+          if (rows.length === 1) rows.push(['', 'Henüz yanıt yok']);
+          const ws = XLSX.utils.aoa_to_sheet(rows);
+          ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, ...survey.questions.map(() => ({ wch: 8 }))];
+          XLSX.utils.book_append_sheet(wb, ws, label.substring(0, 31));
+        }
+      }
+      XLSX.writeFile(wb, surveyId
+        ? `${SURVEYS[surveyId].label}_anonim_${new Date().toISOString().split('T')[0]}.xlsx`
+        : `anket_sonuclari_anonim_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -468,6 +522,64 @@ export default function AdminPage() {
     finally { setLoading(false); }
   };
 
+  // ── Anonimleştirilmiş Kullanım Verileri ──
+  const downloadUsageExcelAnon = async () => {
+    setLoading(true);
+    try {
+      const safeGet = async (col) => { try { return await getDocs(collection(db, col)); } catch { return { docs: [] }; } };
+      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap] = await Promise.all([
+        safeGet('users'), safeGet('sessions'), safeGet('matches'), safeGet('reviews'),
+      ]);
+
+      // Anonim ID map
+      const anonMap = {};
+      let n = 1;
+      usersSnap.docs.forEach(d => { anonMap[d.id] = `P${String(n++).padStart(3,'0')}`; });
+      const anonId = (uid) => anonMap[uid] || `P_${uid.substring(0,6)}`;
+      const userFak = {};
+      usersSnap.docs.forEach(d => { userFak[d.id] = { f: d.data().faculty||'', b: d.data().department||'' }; });
+
+      const wb = XLSX.utils.book_new();
+
+      // Kullanıcılar
+      const uRows = [['No','Katilimci_ID','Fakülte','Bölüm','Kayıt Tarihi','Son Görülme']];
+      usersSnap.docs.forEach((d,i) => {
+        const u = d.data();
+        uRows.push([i+1, anonId(d.id), u.faculty||'', u.department||'', formatDate(u.createdAt), formatDate(u.lastSeen)]);
+      });
+      const ws1 = XLSX.utils.aoa_to_sheet(uRows);
+      ws1['!cols'] = [{wch:5},{wch:14},{wch:22},{wch:22},{wch:18},{wch:18}];
+      XLSX.utils.book_append_sheet(wb, ws1, 'Kullanıcılar');
+
+      // Oturumlar
+      const sRows = [['No','Katilimci_ID','Eslesen_ID','Ders','Tür','Başlangıç','Bitiş','Süre_dk','Odak','Verimlilik']];
+      sessionsSnap.docs.forEach((d,i) => {
+        const s = d.data();
+        if (s.status !== 'completed') return;
+        const uid = s.participants?.[0]||'';
+        sRows.push([i+1, anonId(uid), s.partnerId?anonId(s.partnerId):'—', s.subject||'Genel', s.coSessionId?'Eş Zamanlı':'Bireysel',
+          formatDate(s.startedAt||s.createdAt), formatDate(s.endedAt), s.durationMinutes||0, s.rating?.focusLevel||'', s.rating?.productivity||'']);
+      });
+      const ws2 = XLSX.utils.aoa_to_sheet(sRows);
+      ws2['!cols'] = [{wch:5},{wch:14},{wch:14},{wch:18},{wch:14},{wch:18},{wch:18},{wch:10},{wch:8},{wch:10}];
+      XLSX.utils.book_append_sheet(wb, ws2, 'Oturumlar');
+
+      // Eşleşmeler
+      const mRows = [['No','Kullanıcı_1','Kullanıcı_2','Durum','Uyum_Skoru','Tarih']];
+      matchesSnap.docs.forEach((d,i) => {
+        const m = d.data();
+        mRows.push([i+1, anonId(m.users?.[0]), anonId(m.users?.[1]),
+          m.status==='active'?'Aktif':m.status==='pending'?'Bekliyor':'Sonlandı', m.compatibilityScore||'', formatDate(m.createdAt)]);
+      });
+      const ws3 = XLSX.utils.aoa_to_sheet(mRows);
+      ws3['!cols'] = [{wch:5},{wch:14},{wch:14},{wch:12},{wch:12},{wch:18}];
+      XLSX.utils.book_append_sheet(wb, ws3, 'Eşleşmeler');
+
+      XLSX.writeFile(wb, `kullanim_verileri_anonim_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
   return (
     <AppLayout title="Admin Paneli">
       <div className="max-w-2xl mx-auto flex flex-col gap-5">
@@ -508,12 +620,18 @@ export default function AdminPage() {
           <p className="text-xs mb-4" style={{ color: 'var(--mist)' }}>
             Kullanıcılar, oturumlar, eşleşmeler ve yorumlar — 5 sheet'li tek Excel dosyası
           </p>
+          <div className="flex gap-2">
           <button onClick={downloadUsageExcel} disabled={loading}
-            className="btn-primary w-full py-3 flex items-center justify-center gap-2">
+            className="btn-primary flex-1 py-3 flex items-center justify-center gap-2">
             {loading
               ? <span className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" />
-              : <><Download size={16} /> Kullanım Verilerini İndir (.xlsx)</>}
+              : <><Download size={16} /> İndir (İsimli)</>}
           </button>
+          <button onClick={() => downloadUsageExcelAnon()} disabled={loading}
+            className="btn-outline flex-1 py-3 flex items-center justify-center gap-2">
+            <Download size={16} /> İndir (Anonim)
+          </button>
+        </div>
         </div>
 
         {/* Anket verileri */}
@@ -522,12 +640,18 @@ export default function AdminPage() {
           <p className="text-xs mb-4" style={{ color: 'var(--mist)' }}>
             Her ölçek ayrı sheet — soru metinleri başlık satırında
           </p>
-          <button onClick={() => downloadSurveyExcel()} disabled={loading}
-            className="btn-primary w-full py-3 flex items-center justify-center gap-2 mb-4">
-            {loading
-              ? <span className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" />
-              : <><Download size={16} /> Tüm Ölçekleri İndir (.xlsx)</>}
-          </button>
+          <div className="flex gap-2 mb-4">
+            <button onClick={() => downloadSurveyExcel()} disabled={loading}
+              className="btn-primary flex-1 py-3 flex items-center justify-center gap-2">
+              {loading
+                ? <span className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" />
+                : <><Download size={16} /> İndir (İsimli)</>}
+            </button>
+            <button onClick={() => downloadSurveyExcelAnon()} disabled={loading}
+              className="btn-outline flex-1 py-3 flex items-center justify-center gap-2">
+              <Download size={16} /> İndir (Anonim)
+            </button>
+          </div>
           <div className="flex flex-col gap-2">
             {Object.entries(SURVEYS).map(([id, s]) => (
               <div key={id} className="flex items-center justify-between p-3 rounded-xl"
