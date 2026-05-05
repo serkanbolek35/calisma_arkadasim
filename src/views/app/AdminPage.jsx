@@ -8,33 +8,42 @@ import * as XLSX from 'xlsx';
 
 const ADMIN_UIDS = ['a0QNkfLOyIQJeLufcPHGGsGchsV2'];
 
+// prepost: true  → Firestore'da "id_pre" ve "id_post" anahtarlarıyla kayıtlı
+// prepost: false → Firestore'da düz "id" anahtarıyla kayıtlı
 const SURVEYS = {
   ucla: {
     label: 'UCLA Yalnızlık Ölçeği',
+    prepost: true,
     questions: ['Okul arkadaşlarımla uyum içindeyim','Okulda arkadaşım yok','Okulda yardım alacak kimse yok','Okulda yalnız hissediyorum','Okuldaki grubun parçasıyım','Okuldakilerle ortak yönlerim var','Okulda kimseye yakın değilim','İlgilerimi paylaşan yok','Dışa dönük ve arkadaş canlısıyım','Okuldakilere yakın hissediyorum','Okulda dışlanmış hissediyorum','Okuldaki ilişkilerim samimi','Okulda kimse tarafından tanınmıyorum','Diğerlerinden ayrı duruyorum','İstediğimde arkadaş edinebilirim','Beni gerçekten anlayan insanlar var','İçine kapanık hissediyorum','Paylaşacak bir şey olmayan insanlar var','Konuşabileceğim insanlar var','Yardım alabileceğim insanlar var'],
   },
   amo: {
     label: 'Akademik Motivasyon Ölçeği',
+    prepost: true,
     questions: ['Yüksek ücretli iş için','Yeni şeyler öğrenmek için','İyi üniversiteye hazırlanmak için','Düşüncelerimi paylaşmak için','Boşa zaman harcıyormuşum gibi','Başarıyla tamamlamak mutlu ediyor','Okulu bitirebileceğimi kanıtlamak','Ailem istediği için','Bilinmeyenleri keşfetmeyi seviyorum','Saygın kuruma girmek için','İlgi çekici metinler okumak','Devam konusunda kararsızım','Kişisel hedeflerimi gerçekleştirmek','Başarılı olduğumda önemli hissediyorum','İleride iyi hayat için','İlgimi çeken konularda bilgi artırmak','Daha iyi meslek seçmek için','Derslere kendimi kaptırmak','Neden gittiğimi bilmiyorum','Zor etkinlikleri başarmak zevk veriyor','Zeki olduğumu göstermek','Yüksek puan almak için','Sürekli öğrenmeye yönlendiriyor','Bilgi ve becerilerimi geliştirmek','Farklı konular öğrenmekten zevk','Ne yaptığımı anlayamıyorum','Başarılı olmak mutlu ediyor','Başarabileceğimi göstermek'],
   },
-  self: {
-    label: 'Özyeterlilik Ölçeği (SELF)',
-    questions: ['Karmaşık derste not özeti','Sıkıcı derste motive olma','Notları arkadaşla karşılaştırma','Eksik notları yeniden yazma','Notları temel olgulara indirgeme','Yeni kavramları ilişkilendirme','Etkili çalışma ortağı olma','Arkadaş sorunlarına rağmen ödev','Karamsar hissederken odaklanma','Geri kaldığında zaman artırma','Uzun ödevler için öncelik değiştirme','Soyut kavramlar için örnek düşünme','Sevmediğin derste motive olma','Sınavda karamsar hissederken motive','Kötü sınavdan önce soru belirleme','Teknik detayları ilişkilendirme','Kötü sınavdan sonra tespit etme','Son dakika yerine erken hazırlanma'],
+  feedback: {
+    label: 'Motivasyon ve Kullanıcı Geri Bildirim Anketi',
+    prepost: false,
+    questions: ['Çalışma arkadaşı bulmak için kullanıyorum','Motivasyonumu artırmak için kullanıyorum','Yalnız çalışmamak için kullanıyorum','Sosyalleşmek için kullanıyorum','Yeni arkadaşlar edinmek için kullanıyorum','Düzenli çalışma alışkanlığı için kullanıyorum','Çalışma arkadaşı beklentimi karşılıyor','Çalışma motivasyonumu artırıyor','Çalışma sürecim daha verimli hale geldi','Sosyal etkileşim ihtiyacımı karşılıyor','Yalnızlık hissimi azaltıyor','Genel olarak beklentilerimi karşılıyor','Kullanmaya devam etmeyi düşünüyorum'],
   },
   sus: {
     label: 'Sistem Kullanılabilirlik (SUS-TR)',
+    prepost: false,
     questions: ['Sıklıkla kullanmak isteyeceğim','Gereksiz karmaşık buldum','Kullanımının kolay olduğunu düşündüm','Teknik destek gerektiğini düşünüyorum','Fonksiyonları iyi entegre buldum','Çok tutarsızlık olduğunu düşündüm','Çoğu kişi çabuk öğrenir','Kullanımı çok elverişsiz buldum','Kullanırken kendimden emin hissettim','Önce çok şey öğrenmem gerekti'],
   },
   study_habits: {
     label: 'Ders Çalışma Alışkanlıkları',
+    prepost: true,
     questions: ['Kendi programımı hazırlarım','Programıma göre hareket ederim','Düzenli çalışırım','Tüm konulara hazırlanırım','Özel derslere katılırım','Rahatsız yerde okurum','Ev işleri yüzünden çalışamam','Önemli noktaları not alırım','Sözlük kullanırım','Yeni kelimelere dikkat ederim','Sınıfta detaylı not tutarım','Şüpheli noktaları sorarım','Zorlukları hemen çözerim','Önemli noktaları kaçırırım','Yardımcı kitapları okurum','Altını çizerim','Zorlandığım derse dikkat ederim','Zayıf konuya zaman ayırırım','Zor derslere öncelik veririm','Aynı konuyu uzun süre okurum','Sadece ilgimi çekeni çalışırım','Konsantre çalışırım','Hiç çalışmadığımı hissederim','Zihnim başka yerlere kayar','Okuduğumu hatırlamıyorum','Sınavda önce düşünürüm','Sınav zamanında gerginleşirim','Gece geç saate kadar çalışırım','Sınav zamanında notları okurum','Sınav zamanında tavsiyeler alırım','Önceki sınav sorularını hazırlamam','Anladıktan sonra ezberlerim','Arkadaşlarımla tartışırım','Yatarak okurum','Sesli okurum','Konuları karşılaştırırım','Derinlemesine düşünürüm','Yeni dersten önce gözden geçiririm','Paragraftan sonra tekrar ederim','Boş zamanlarda okurum','Kütüphane kitaplarını kullanırım','Okuldaki materyalleri okurum'],
   },
   procrastination: {
     label: 'Akademik Erteleme Ölçeği',
+    prepost: true,
     questions: ['İşleri gereksiz yere geciktiririm','Başlamayı ertelerim','Son dakikaya kadar beklerim','Zor kararları geciktiririm','Alışkanlık düzeltmeyi ertelerim','Yapmamak için bahane bulurum','Sıkıcı işlere de zaman ayırırım','İflah olmaz zaman avaresiyim','Zamanımı boşa harcıyorum','Zoru ertelemeye inanırım','Söz verir sonra ayak sürürüm','Eylem planıma uyarım','Nefret etsem de harekete geçemem','Önemli işleri vaktinde bitiririm','Önemini bilsem de harekete geçemem','Yarına bırakmak benim tarzım değil'],
   },
   stress: {
     label: 'Algılanan Stres Ölçeği (PSS)',
+    prepost: true,
     questions: ['Her şeyin yolunda olduğunu hissettim','İşlerin istediğim gibi gittiğini hissettim','Sorunlarla başa çıkma konusunda güvendim','Kızgınlıkları kontrol edebildim','Beklenmedik olay nedeniyle altüst oldum','Önemli şeyleri kontrol edemediğimi hissettim','Zorlukların üstesinden gelemeyeceğimi hissettim','Sinirli ve stresli hissettim','Her şeyle başa çıkamadığımı fark ettim','Kontrolüm dışındaki şeyler yüzünden öfkelendim'],
   },
 };
@@ -77,7 +86,13 @@ export default function AdminPage() {
       Object.keys(SURVEYS).forEach(k => completedCounts[k] = 0);
       surveysSnap.docs.forEach(d => {
         const data = d.data();
-        Object.keys(SURVEYS).forEach(k => { if (data.completed?.[k]) completedCounts[k]++; });
+        Object.entries(SURVEYS).forEach(([k, s]) => {
+          if (s.prepost) {
+            if (data.completed?.[`${k}_pre`] || data.completed?.[`${k}_post`]) completedCounts[k]++;
+          } else {
+            if (data.completed?.[k]) completedCounts[k]++;
+          }
+        });
       });
       setStats({
         totalUsers: usersSnap.size,
@@ -92,6 +107,8 @@ export default function AdminPage() {
   };
 
   // ── Anket Excel ──
+  // DÜZELTME: prepost:true olan anketler Firestore'a "id_pre" ve "id_post"
+  // anahtarlarıyla kaydedilir. Eskiden sadece "id" bakıldığı için tablo boş geliyordu.
   const downloadSurveyExcel = async (surveyId = null) => {
     setLoading(true);
     try {
@@ -106,35 +123,55 @@ export default function AdminPage() {
       });
       const wb = XLSX.utils.book_new();
       const surveysToExport = surveyId ? { [surveyId]: SURVEYS[surveyId] } : SURVEYS;
+
       for (const [id, survey] of Object.entries(surveysToExport)) {
-        const rows = [['No', 'İsim', 'Email', 'Fakülte', 'Bölüm', ...survey.questions.map((q, i) => `S${i + 1}: ${q}`)]];
-        let rowNo = 1;
-        surveysSnap.docs.forEach(doc => {
-          const data = doc.data();
-          if (!data[id] || !data.completed?.[id]) return;
-          const user = userMap[doc.id] || { isim: doc.id, email: '', fakulte: '', bolum: '' };
-          const row = [rowNo++, user.isim, user.email, user.fakulte, user.bolum];
-          for (let i = 0; i < survey.questions.length; i++) row.push(data[id][i] ?? '');
-          rows.push(row);
-        });
-        if (rows.length === 1) rows.push(['', 'Henüz yanıt yok']);
-        const ws = XLSX.utils.aoa_to_sheet(rows);
-        ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 25 }, { wch: 20 }, { wch: 20 }, ...survey.questions.map(() => ({ wch: 8 }))];
-        XLSX.utils.book_append_sheet(wb, ws, survey.label.substring(0, 31));
+        // prepost:true → iki ayrı sheet (_pre ve _post), false → tek sheet
+        const variants = survey.prepost
+          ? [{ key: `${id}_pre`, label: `${survey.label} (Ön Test)` }, { key: `${id}_post`, label: `${survey.label} (Son Test)` }]
+          : [{ key: id, label: survey.label }];
+
+        for (const { key, label } of variants) {
+          const rows = [['No', 'İsim', 'Email', 'Fakülte', 'Bölüm', ...survey.questions.map((q, i) => `S${i + 1}: ${q}`)]];
+          let rowNo = 1;
+          surveysSnap.docs.forEach(doc => {
+            const data = doc.data();
+            // Hem yeni anahtar (key) hem de tamamlandı bayrağını kontrol et
+            if (!data[key] || !data.completed?.[key]) return;
+            const user = userMap[doc.id] || { isim: doc.id, email: '', fakulte: '', bolum: '' };
+            const row = [rowNo++, user.isim, user.email, user.fakulte, user.bolum];
+            for (let i = 0; i < survey.questions.length; i++) row.push(data[key][i] ?? '');
+            rows.push(row);
+          });
+          if (rows.length === 1) rows.push(['', 'Henüz yanıt yok']);
+          const ws = XLSX.utils.aoa_to_sheet(rows);
+          ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 25 }, { wch: 20 }, { wch: 20 }, ...survey.questions.map(() => ({ wch: 8 }))];
+          XLSX.utils.book_append_sheet(wb, ws, label.substring(0, 31));
+        }
       }
+
       if (!surveyId) {
-        const [usSnap, survSnap] = [await getDocs(collection(db, 'users')), await getDocs(collection(db, 'surveys'))];
-        const summaryRows = [['Ölçek', 'Yanıt Sayısı']];
+        const summaryRows = [['Ölçek / Aşama', 'Yanıt Sayısı']];
         Object.entries(SURVEYS).forEach(([id, s]) => {
-          let count = 0;
-          survSnap.docs.forEach(d => { if (d.data().completed?.[id]) count++; });
-          summaryRows.push([s.label, count]);
+          if (s.prepost) {
+            let preCount = 0, postCount = 0;
+            surveysSnap.docs.forEach(d => {
+              if (d.data().completed?.[`${id}_pre`]) preCount++;
+              if (d.data().completed?.[`${id}_post`]) postCount++;
+            });
+            summaryRows.push([`${s.label} — Ön Test`, preCount]);
+            summaryRows.push([`${s.label} — Son Test`, postCount]);
+          } else {
+            let count = 0;
+            surveysSnap.docs.forEach(d => { if (d.data().completed?.[id]) count++; });
+            summaryRows.push([s.label, count]);
+          }
         });
-        summaryRows.push([''], ['Toplam Kullanıcı', usSnap.size], ['İndirme Tarihi', new Date().toLocaleDateString('tr-TR')]);
+        summaryRows.push([''], ['Toplam Kullanıcı', usersSnap.size], ['İndirme Tarihi', new Date().toLocaleDateString('tr-TR')]);
         const ws = XLSX.utils.aoa_to_sheet(summaryRows);
-        ws['!cols'] = [{ wch: 35 }, { wch: 15 }];
+        ws['!cols'] = [{ wch: 40 }, { wch: 15 }];
         XLSX.utils.book_append_sheet(wb, ws, 'Özet');
       }
+
       XLSX.writeFile(wb, surveyId ? `${SURVEYS[surveyId].label}_${new Date().toISOString().split('T')[0]}.xlsx` : `anket_sonuclari_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
