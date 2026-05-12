@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import { useAuth } from '../../context/AuthContext';
 import { getUserSessions, createSession, updateSessionStatus, addSessionRating, writeLog, enrichSessionsForViewer } from '../../services/session.service';
-import { createCoSessionRequest, joinWithCode, listenCoSession, endCoSession, getRealLocation } from '../../services/coSession.service';
+import { createCoSessionRequest, joinWithCode, listenCoSession, endCoSession } from '../../services/coSession.service';
 import { getMatches } from '../../services/matching.service';
 import { getUser, getUserPreferences } from '../../services/user.service';
 import { serverTimestamp } from 'firebase/firestore';
@@ -153,7 +153,6 @@ const CoSessionModal = ({ partner, subject, currentUser, userDoc, onClose, onSes
                 ))}
               </select>
             </div>
-            {error && <p className="text-xs mb-3 px-1" style={{ color: '#E87070' }}>{error}</p>}
             <div className="flex gap-3">
               <button onClick={handleSendInvite} disabled={sending} className="btn-primary flex-1 py-3 flex items-center justify-center gap-2">
                 {sending ? <span className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" /> : <><Users size={15} /> Davet Gönder</>}
@@ -197,24 +196,9 @@ const CodeEntryModal = ({ currentUser, userDoc, onClose, onSessionStarted }) => 
     if (code.length !== 6) { setError('6 haneli kodu girin'); return; }
     setLoading(true);
     try {
-      // Önce GPS konumunu al
-      let partnerLat = null, partnerLng = null;
-      try {
-        const loc = await getRealLocation();
-        partnerLat = loc.lat;
-        partnerLng = loc.lng;
-      } catch {
-        setError('Konum izni gerekli. Lütfen tarayıcı konum iznini açıp tekrar deneyin.');
-        setLoading(false);
-        return;
-      }
-
-      const result = await joinWithCode(code, currentUser.uid, partnerLat, partnerLng);
-      if (result.error) {
-        setError(result.error);
-        setLoading(false);
-        return;
-      }
+      const result = await joinWithCode(code, currentUser.uid);
+      if (result.error) { setError(result.error); setLoading(false); return; }
+      // Oturum aktif oldu, direkt başlat
       onSessionStarted(result.id, { ...result.data, status: 'active' });
     } catch (e) { setError('Bir hata oluştu'); console.error(e); }
     finally { setLoading(false); }
