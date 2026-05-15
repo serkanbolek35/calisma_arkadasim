@@ -464,9 +464,15 @@ export default function AdminPage() {
         return '—';
       };
 
-      // Logları zamana göre sırala
+      // Logları zamana göre sırala — sadece oturum tamamlama olayları (rozet vs. hariç)
+      const SESSION_EVENTS = ['eslesme_oturumu_tamamlandi', 'bireysel_oturum_tamamlandi', 'oturum_baslatildi', 'oturum_sonlandirildi'];
       const sortedLogs = logsSnap.docs
         .map(d => ({ id: d.id, ...d.data() }))
+        .filter(l => {
+          const tip = (l.islemTipi || '').toLowerCase().replace(/[_\s]/g, '_');
+          return SESSION_EVENTS.some(e => tip.includes(e.replace(/_/g, ''))) ||
+                 tip.includes('oturum') && !tip.includes('rozet') && !tip.includes('badge');
+        })
         .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
 
       sortedLogs.forEach((l, i) => {
@@ -527,8 +533,8 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const safeGet = async (col) => { try { return await getDocs(collection(db, col)); } catch { return { docs: [] }; } };
-      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap] = await Promise.all([
-        safeGet('users'), safeGet('sessions'), safeGet('matches'), safeGet('reviews'),
+      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, logsAnonSnap] = await Promise.all([
+        safeGet('users'), safeGet('sessions'), safeGet('matches'), safeGet('reviews'), safeGet('logs'),
       ]);
 
       // Anonim ID map
@@ -574,6 +580,31 @@ export default function AdminPage() {
       const ws3 = XLSX.utils.aoa_to_sheet(mRows);
       ws3['!cols'] = [{wch:5},{wch:14},{wch:14},{wch:12},{wch:12},{wch:18}];
       XLSX.utils.book_append_sheet(wb, ws3, 'Eşleşmeler');
+
+      // Uygulama Logları — sadece oturum tamamlama olayları, rozet hariç, kullanıcı adı yok
+      const lRows = [['No','Katilimci_ID','Eslesen_ID','Islem_Tipi','Calisma_Konusu','Baslangic_Zamani','Bitis_Zamani','Toplam_Sure_dk']];
+      const anonLogs = logsAnonSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(l => {
+          const tip = (l.islemTipi || '').toLowerCase();
+          return tip.includes('oturum') && !tip.includes('rozet') && !tip.includes('badge') && tip !== '';
+        })
+        .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
+      anonLogs.forEach((l, i) => {
+        lRows.push([
+          i + 1,
+          anonId(l.kullaniciId),
+          l.eslesenKisiId ? anonId(l.eslesenKisiId) : '—',
+          l.islemTipi || '',
+          l.calismaKonusu || '—',
+          formatDate(l.zaman),
+          l.bitisZamani ? new Date(l.bitisZamani).toLocaleString('tr-TR') : '—',
+          l.toplamSure != null ? l.toplamSure : '—',
+        ]);
+      });
+      const wsLogs = XLSX.utils.aoa_to_sheet(lRows);
+      wsLogs['!cols'] = [{wch:5},{wch:14},{wch:14},{wch:32},{wch:22},{wch:20},{wch:20},{wch:14}];
+      XLSX.utils.book_append_sheet(wb, wsLogs, 'Uygulama Logları');
 
       XLSX.writeFile(wb, `kullanim_verileri_anonim_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (e) { console.error(e); }
