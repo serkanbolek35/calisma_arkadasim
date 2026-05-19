@@ -66,23 +66,29 @@ const toDateValue = (value) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-const resolveLogTimestamps = (log, sessionById = {}) => {
+const resolveLogTimes = (log, sessionById = {}, coSessionById = {}) => {
   const sess = log.sessionId ? sessionById[log.sessionId] : null;
+  const coId = log.coSessionId || sess?.coSessionId;
+  const co = coId ? coSessionById[coId] : null;
+
   const baslangic = toDateValue(log.baslangicZamani)
     ?? toDateValue(sess?.startedAt)
     ?? toDateValue(sess?.createdAt)
+    ?? toDateValue(co?.startedAt)
     ?? toDateValue(log.zaman);
 
-  let bitis = toDateValue(log.bitisZamani) ?? toDateValue(sess?.endedAt);
-  if (!bitis && baslangic && log.toplamSure != null) {
-    bitis = new Date(baslangic.getTime() + log.toplamSure * 60 * 1000);
-  }
-  if (!bitis) bitis = toDateValue(log.zaman);
+  const bitis = toDateValue(log.bitisZamani)
+    ?? toDateValue(sess?.endedAt)
+    ?? toDateValue(co?.endedAt)
+    ?? toDateValue(log.zaman);
 
-  return {
-    baslangic: formatDate(baslangic),
-    bitis: formatDate(bitis),
-  };
+  return { baslangic, bitis };
+};
+
+const durationMinutesFromTimes = (baslangic, bitis) => {
+  if (!baslangic || !bitis) return '—';
+  const mins = Math.round((bitis.getTime() - baslangic.getTime()) / 60000);
+  return mins >= 0 ? mins : '—';
 };
 
 const resolveLogSessionType = (log, sessionById = {}) => {
@@ -97,6 +103,12 @@ const buildSessionById = (sessionsSnap) => {
   const sessionById = {};
   sessionsSnap.docs.forEach((d) => { sessionById[d.id] = d.data(); });
   return sessionById;
+};
+
+const buildCoSessionById = (coSessionsSnap) => {
+  const coSessionById = {};
+  coSessionsSnap.docs.forEach((d) => { coSessionById[d.id] = d.data(); });
+  return coSessionById;
 };
 
 const createAnonIdMapper = (usersSnap) => {
@@ -503,8 +515,7 @@ export default function AdminPage() {
         'Islem_Tipi', 'Calisma_Konusu', 'Baslangic_Zamani', 'Bitis_Zamani', 'Toplam_Sure_dk', 'Bulusma_Yeri'
       ]];
       const sessionById = buildSessionById(sessionsSnap);
-      const coSessionById = {};
-      coSessionsSnap.docs.forEach((d) => { coSessionById[d.id] = d.data(); });
+      const coSessionById = buildCoSessionById(coSessionsSnap);
 
       const resolveBulusmaYeri = (log) => {
         const trim = (v) => (v != null && String(v).trim() !== '' ? String(v).trim() : '');
@@ -530,7 +541,7 @@ export default function AdminPage() {
         .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
 
       sortedLogs.forEach((l) => {
-        const { baslangic, bitis } = resolveLogTimestamps(l, sessionById);
+        const { baslangic, bitis } = resolveLogTimes(l, sessionById, coSessionById);
         ek8Rows.push([
           l.sessionId || '—',
           l.kullaniciId || '',
@@ -539,9 +550,9 @@ export default function AdminPage() {
           l.eslesenKisiId ? (userMap[l.eslesenKisiId]?.displayName || l.eslesenKisiId) : '—',
           l.islemTipi || '',
           l.calismaKonusu || '—',
-          baslangic,
-          bitis,
-          l.toplamSure != null ? l.toplamSure : '—',
+          formatDate(baslangic),
+          formatDate(bitis),
+          durationMinutesFromTimes(baslangic, bitis),
           resolveBulusmaYeri(l),
         ]);
       });
@@ -587,12 +598,13 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const safeGet = async (col) => { try { return await getDocs(collection(db, col)); } catch { return { docs: [] }; } };
-      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, logsAnonSnap] = await Promise.all([
-        safeGet('users'), safeGet('sessions'), safeGet('matches'), safeGet('reviews'), safeGet('logs'),
+      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, coSessionsSnap, logsAnonSnap] = await Promise.all([
+        safeGet('users'), safeGet('sessions'), safeGet('matches'), safeGet('reviews'), safeGet('coSessions'), safeGet('logs'),
       ]);
 
       const anonId = createAnonIdMapper(usersSnap);
       const sessionById = buildSessionById(sessionsSnap);
+      const coSessionById = buildCoSessionById(coSessionsSnap);
       const userFak = {};
       usersSnap.docs.forEach(d => { userFak[d.id] = { f: d.data().faculty||'', b: d.data().department||'' }; });
 
@@ -639,16 +651,16 @@ export default function AdminPage() {
         .filter(l => !isBadgeLog(l) && (l.islemTipi || '').trim() !== '')
         .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
       sortedAnonLogs.forEach((l, i) => {
-        const { baslangic, bitis } = resolveLogTimestamps(l, sessionById);
+        const { baslangic, bitis } = resolveLogTimes(l, sessionById, coSessionById);
         lRows.push([
           i + 1,
           anonId(l.kullaniciId),
           l.eslesenKisiId ? anonId(l.eslesenKisiId) : '—',
           l.islemTipi || '',
           l.calismaKonusu || '—',
-          baslangic,
-          bitis,
-          l.toplamSure != null ? l.toplamSure : '—',
+          formatDate(baslangic),
+          formatDate(bitis),
+          durationMinutesFromTimes(baslangic, bitis),
           resolveLogSessionType(l, sessionById),
         ]);
       });

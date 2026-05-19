@@ -25,6 +25,37 @@ export const enrichSessionPartnerForViewer = async (viewerUid, session) => {
 export const enrichSessionsForViewer = async (viewerUid, sessions) =>
   Promise.all(sessions.map((s) => enrichSessionPartnerForViewer(viewerUid, s)));
 
+const toTimestampDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const d = value.toDate?.() ?? new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+/** Oturum süresini dakika olarak hesaplar — coSession kaydı > zaman damgaları > kronometre */
+export const computeDurationMinutes = ({ timerSecs = 0, startTime = null, endTime = null, coSession = null } = {}) => {
+  if (coSession?.status === 'ended' && coSession.durationMinutes != null && coSession.durationMinutes >= 0) {
+    return coSession.durationMinutes;
+  }
+
+  const coStart = toTimestampDate(coSession?.startedAt);
+  const coEnd = toTimestampDate(coSession?.endedAt);
+  if (coStart && coEnd) {
+    const mins = Math.round((coEnd.getTime() - coStart.getTime()) / 60000);
+    if (mins >= 0) return mins;
+  }
+
+  const start = toTimestampDate(startTime);
+  const end = toTimestampDate(endTime) ?? new Date();
+  if (start) {
+    const mins = Math.round((end.getTime() - start.getTime()) / 60000);
+    if (mins >= 0) return mins;
+  }
+
+  if (timerSecs > 0) return Math.max(1, Math.ceil(timerSecs / 60));
+  return 0;
+};
+
 // ── Uygulama Log Kaydı ────────────────────────────────────────
 // Her önemli eylem için logs koleksiyonuna kayıt yazar
 export const writeLog = async ({ sessionId, kullaniciId, eslesenKisiId, islemTipi, calismaKonusu, baslangicZamani, bitisZamani, toplamSure, bulusmaYeri, coSessionId }) => {

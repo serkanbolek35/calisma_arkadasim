@@ -72,6 +72,27 @@ const BYPASS_EMAILS = [
   'nilaydogan@marun.edu.tr',
   'emregunay@marun.edu.tr',
   'seldaacar@marun.edu.tr',
+
+  // Yeni eklenenler
+  'aysedemir@marun.edu.tr',
+  'kayamehmet@marun.edu.tr',
+  'elifyldz@marun.edu.tr',
+  'canaydn@marun.edu.tr',
+  'zeynepcelik@marun.edu.tr',
+  'buraksahin@marun.edu.tr',
+  'arslanmerve@marun.edu.tr',
+  'emrekoc@marun.edu.tr',
+  'dilaraozkn@marun.edu.tr',
+  'ahmetkaraca@marun.edu.tr',
+  'kubrapolat@marun.edu.tr',
+  'furkanylmz@marun.edu.tr',
+  'iremaksoy@marun.edu.tr',
+  'oguzerdem@marun.edu.tr',
+  'busekurt@marun.edu.tr',
+  'tolgaozdmr@marun.edu.tr',
+  'senayalcin@marun.edu.tr',
+  'yusufcinar@marun.edu.tr',
+  'ecetas@marun.edu.tr',
 ];
 
 const ProtectedRoute = ({ children, requireOnboarding = true }) => {

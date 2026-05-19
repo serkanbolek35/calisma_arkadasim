@@ -3,7 +3,7 @@ import { Play, Square, CheckCircle2, UserCheck, KeyRound, Users } from 'lucide-r
 import { useLocation, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import { useAuth } from '../../context/AuthContext';
-import { getUserSessions, createSession, updateSessionStatus, addSessionRating, writeLog, enrichSessionsForViewer } from '../../services/session.service';
+import { getUserSessions, createSession, updateSessionStatus, addSessionRating, writeLog, computeDurationMinutes, enrichSessionsForViewer } from '../../services/session.service';
 import { createCoSessionRequest, joinWithCode, listenCoSession, endCoSession, getRealLocation } from '../../services/coSession.service';
 import { getMatches } from '../../services/matching.service';
 import { getUser, getUserPreferences } from '../../services/user.service';
@@ -382,6 +382,7 @@ export default function SessionsPage() {
         partner: { uid: partnerId, displayName: partnerName },
         coSessionId: active.id,
         bulusmaYeri: cs.bulusmaYeri || null,
+        startTime: startedAt,
       });
 
       // Timer'ı geçen süreyle başlat
@@ -396,12 +397,30 @@ export default function SessionsPage() {
           coSessionUnsubRef.current?.();
           coSessionUnsubRef.current = null;
           timer.stop();
-          const mins = csData.durationMinutes || Math.floor(elapsed / 60);
+          const endTime = new Date();
+          const mins = computeDurationMinutes({
+            timerSecs: timer.secs,
+            startTime: startedAt,
+            endTime,
+            coSession: csData,
+          });
           const sid = csData.sessionId;
           if (sid) {
             await updateSessionStatus(sid, 'completed', {
               durationMinutes: mins,
               endedAt: serverTimestamp(),
+            });
+            await writeLog({
+              sessionId: sid,
+              kullaniciId: currentUser.uid,
+              eslesenKisiId: partnerId,
+              islemTipi: 'Eslesme_Oturum_Tamamlandi',
+              calismaKonusu: cs.subject || 'Genel Çalışma',
+              baslangicZamani: startedAt.toISOString(),
+              toplamSure: mins,
+              bitisZamani: endTime.toISOString(),
+              bulusmaYeri: csData.bulusmaYeri ?? cs.bulusmaYeri ?? null,
+              coSessionId: active.id,
             });
             setCompletedId(sid);
           }
@@ -467,18 +486,22 @@ export default function SessionsPage() {
       }
     }
 
+    const startedAt = session.startedAt?.toDate?.() ?? new Date();
+    const elapsedSecs = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 1000));
+
     const activeData = {
       id: sessionId,
       subject,
       duration: 60,
       partner: { uid: partnerId, displayName: partnerName },
       coSessionId,
-      startTime: new Date(),
+      startTime: startedAt,
       bulusmaYeri: meetingPlace,
     };
 
     setActiveSession(activeData);
     timer.reset();
+    timer.setSecs(elapsedSecs);
     timer.start();
 
     // coSession dinle
@@ -494,7 +517,13 @@ export default function SessionsPage() {
         coSessionUnsubRef.current?.();
         coSessionUnsubRef.current = null;
         timer.stop();
-        const mins = cs.durationMinutes || Math.floor(timer.secs / 60);
+        const endTime = new Date();
+        const mins = computeDurationMinutes({
+          timerSecs: timer.secs,
+          startTime: activeData.startTime,
+          endTime,
+          coSession: cs,
+        });
         const sid = cs.sessionId || activeData.id || sessionId;
 
         if (sid) {
@@ -502,7 +531,6 @@ export default function SessionsPage() {
             durationMinutes: mins,
             endedAt: serverTimestamp(),
           });
-          // Partner için de log yaz
           await writeLog({
             sessionId: sid,
             kullaniciId: currentUser.uid,
@@ -511,7 +539,7 @@ export default function SessionsPage() {
             calismaKonusu: subject,
             baslangicZamani: activeData.startTime?.toISOString() ?? null,
             toplamSure: mins,
-            bitisZamani: new Date().toISOString(),
+            bitisZamani: endTime.toISOString(),
             bulusmaYeri: cs.bulusmaYeri ?? null,
             coSessionId,
           });
@@ -543,7 +571,12 @@ export default function SessionsPage() {
 
   const handleStop = async () => {
     timer.stop();
-    const mins = Math.floor(timer.secs / 60);
+    const endTime = new Date();
+    const mins = computeDurationMinutes({
+      timerSecs: timer.secs,
+      startTime: activeSession.startTime,
+      endTime,
+    });
 
     if (activeSession.id) {
       await updateSessionStatus(activeSession.id, 'completed', {
@@ -553,22 +586,21 @@ export default function SessionsPage() {
       setCompletedId(activeSession.id);
     }
 
-    // Log: tam oturum bilgisi
-    await writeLog({
-      sessionId: activeSession.id,
-      kullaniciId: currentUser.uid,
-      eslesenKisiId: activeSession.partner?.uid || null,
-      islemTipi: activeSession.partner ? 'Eslesme_Oturum_Tamamlandi' : 'Bireysel_Oturum_Tamamlandi',
-      calismaKonusu: activeSession.subject,
-      baslangicZamani: activeSession.startTime?.toISOString() ?? null,
-      toplamSure: mins,
-      bitisZamani: new Date().toISOString(),
-      bulusmaYeri: activeSession.bulusmaYeri || null,
-      coSessionId: activeSession.coSessionId || null,
-    });
-
     if (activeSession.coSessionId) {
       await endCoSession(activeSession.coSessionId, mins);
+    } else {
+      await writeLog({
+        sessionId: activeSession.id,
+        kullaniciId: currentUser.uid,
+        eslesenKisiId: activeSession.partner?.uid || null,
+        islemTipi: activeSession.partner ? 'Eslesme_Oturum_Tamamlandi' : 'Bireysel_Oturum_Tamamlandi',
+        calismaKonusu: activeSession.subject,
+        baslangicZamani: activeSession.startTime?.toISOString() ?? null,
+        toplamSure: mins,
+        bitisZamani: endTime.toISOString(),
+        bulusmaYeri: activeSession.bulusmaYeri || null,
+        coSessionId: null,
+      });
     }
 
     setActiveSession(null);
