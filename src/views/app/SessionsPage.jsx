@@ -503,7 +503,6 @@ export default function SessionsPage() {
             endedAt: serverTimestamp(),
           });
           // Partner için de log yaz
-          const endNow2 = new Date();
           await writeLog({
             sessionId: sid,
             kullaniciId: currentUser.uid,
@@ -511,8 +510,7 @@ export default function SessionsPage() {
             islemTipi: 'Eslesme_Oturum_Tamamlandi',
             calismaKonusu: subject,
             toplamSure: mins,
-            baslangicZamani: activeData.startTime?.toISOString() || null,
-            bitisZamani: endNow2.toISOString(),
+            bitisZamani: new Date().toISOString(),
             bulusmaYeri: cs.bulusmaYeri ?? null,
           });
           setCompletedId(sid);
@@ -553,8 +551,7 @@ export default function SessionsPage() {
       setCompletedId(activeSession.id);
     }
 
-    // Log: tam oturum bilgisi (baslangic + bitis)
-    const now = new Date();
+    // Log: tam oturum bilgisi
     await writeLog({
       sessionId: activeSession.id,
       kullaniciId: currentUser.uid,
@@ -562,8 +559,7 @@ export default function SessionsPage() {
       islemTipi: activeSession.partner ? 'Eslesme_Oturum_Tamamlandi' : 'Bireysel_Oturum_Tamamlandi',
       calismaKonusu: activeSession.subject,
       toplamSure: mins,
-      baslangicZamani: activeSession.startTime?.toISOString() || null,
-      bitisZamani: now.toISOString(),
+      bitisZamani: new Date().toISOString(),
       bulusmaYeri: activeSession.bulusmaYeri || null,
     });
 

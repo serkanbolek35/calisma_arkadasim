@@ -57,8 +57,14 @@ const MatchMap = ({ lat, lng, potentials, onSelectUser }) => {
 
     potentials.forEach(user => {
       if (!user.campusLat || !user.campusLng) return;
-      const jLat = user.campusLat + (Math.random() - 0.5) * 0.001;
-      const jLng = user.campusLng + (Math.random() - 0.5) * 0.001;
+      // Konumu gizle: uid'den deterministik seed → her zaman aynı yerde görünür
+      // ama gerçek konumundan 400-900m uzakta, rastgele bir yönde
+      const seed = user.uid.split('').reduce((a, c, i) => a + c.charCodeAt(0) * (i + 1), 0);
+      const angle = (seed * 2.3999) % (2 * Math.PI); // 0-2π arası sabit açı
+      const meters = 400 + (seed % 500); // 400-900m arası sabit mesafe
+      const meterToDeg = 1 / 111320;
+      const jLat = user.campusLat + Math.cos(angle) * meters * meterToDeg;
+      const jLng = user.campusLng + Math.sin(angle) * meters * meterToDeg / Math.cos(user.campusLat * Math.PI / 180);
       const score = user.compatibilityScore || 0;
       const color = score >= 70 ? '#E8A020' : '#7A9E7A';
       const onlineDot = user.isOnline

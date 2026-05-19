@@ -8,33 +8,42 @@ import * as XLSX from 'xlsx';
 
 const ADMIN_UIDS = ['a0QNkfLOyIQJeLufcPHGGsGchsV2'];
 
+// prepost: true  → Firestore'da "id_pre" ve "id_post" anahtarlarıyla kayıtlı
+// prepost: false → Firestore'da düz "id" anahtarıyla kayıtlı
 const SURVEYS = {
   ucla: {
     label: 'UCLA Yalnızlık Ölçeği',
+    prepost: true,
     questions: ['Okul arkadaşlarımla uyum içindeyim','Okulda arkadaşım yok','Okulda yardım alacak kimse yok','Okulda yalnız hissediyorum','Okuldaki grubun parçasıyım','Okuldakilerle ortak yönlerim var','Okulda kimseye yakın değilim','İlgilerimi paylaşan yok','Dışa dönük ve arkadaş canlısıyım','Okuldakilere yakın hissediyorum','Okulda dışlanmış hissediyorum','Okuldaki ilişkilerim samimi','Okulda kimse tarafından tanınmıyorum','Diğerlerinden ayrı duruyorum','İstediğimde arkadaş edinebilirim','Beni gerçekten anlayan insanlar var','İçine kapanık hissediyorum','Paylaşacak bir şey olmayan insanlar var','Konuşabileceğim insanlar var','Yardım alabileceğim insanlar var'],
   },
   amo: {
     label: 'Akademik Motivasyon Ölçeği',
+    prepost: true,
     questions: ['Yüksek ücretli iş için','Yeni şeyler öğrenmek için','İyi üniversiteye hazırlanmak için','Düşüncelerimi paylaşmak için','Boşa zaman harcıyormuşum gibi','Başarıyla tamamlamak mutlu ediyor','Okulu bitirebileceğimi kanıtlamak','Ailem istediği için','Bilinmeyenleri keşfetmeyi seviyorum','Saygın kuruma girmek için','İlgi çekici metinler okumak','Devam konusunda kararsızım','Kişisel hedeflerimi gerçekleştirmek','Başarılı olduğumda önemli hissediyorum','İleride iyi hayat için','İlgimi çeken konularda bilgi artırmak','Daha iyi meslek seçmek için','Derslere kendimi kaptırmak','Neden gittiğimi bilmiyorum','Zor etkinlikleri başarmak zevk veriyor','Zeki olduğumu göstermek','Yüksek puan almak için','Sürekli öğrenmeye yönlendiriyor','Bilgi ve becerilerimi geliştirmek','Farklı konular öğrenmekten zevk','Ne yaptığımı anlayamıyorum','Başarılı olmak mutlu ediyor','Başarabileceğimi göstermek'],
   },
-  self: {
-    label: 'Özyeterlilik Ölçeği (SELF)',
-    questions: ['Karmaşık derste not özeti','Sıkıcı derste motive olma','Notları arkadaşla karşılaştırma','Eksik notları yeniden yazma','Notları temel olgulara indirgeme','Yeni kavramları ilişkilendirme','Etkili çalışma ortağı olma','Arkadaş sorunlarına rağmen ödev','Karamsar hissederken odaklanma','Geri kaldığında zaman artırma','Uzun ödevler için öncelik değiştirme','Soyut kavramlar için örnek düşünme','Sevmediğin derste motive olma','Sınavda karamsar hissederken motive','Kötü sınavdan önce soru belirleme','Teknik detayları ilişkilendirme','Kötü sınavdan sonra tespit etme','Son dakika yerine erken hazırlanma'],
+  feedback: {
+    label: 'Motivasyon ve Kullanıcı Geri Bildirim Anketi',
+    prepost: false,
+    questions: ['Çalışma arkadaşı bulmak için kullanıyorum','Motivasyonumu artırmak için kullanıyorum','Yalnız çalışmamak için kullanıyorum','Sosyalleşmek için kullanıyorum','Yeni arkadaşlar edinmek için kullanıyorum','Düzenli çalışma alışkanlığı için kullanıyorum','Çalışma arkadaşı beklentimi karşılıyor','Çalışma motivasyonumu artırıyor','Çalışma sürecim daha verimli hale geldi','Sosyal etkileşim ihtiyacımı karşılıyor','Yalnızlık hissimi azaltıyor','Genel olarak beklentilerimi karşılıyor','Kullanmaya devam etmeyi düşünüyorum'],
   },
   sus: {
     label: 'Sistem Kullanılabilirlik (SUS-TR)',
+    prepost: false,
     questions: ['Sıklıkla kullanmak isteyeceğim','Gereksiz karmaşık buldum','Kullanımının kolay olduğunu düşündüm','Teknik destek gerektiğini düşünüyorum','Fonksiyonları iyi entegre buldum','Çok tutarsızlık olduğunu düşündüm','Çoğu kişi çabuk öğrenir','Kullanımı çok elverişsiz buldum','Kullanırken kendimden emin hissettim','Önce çok şey öğrenmem gerekti'],
   },
   study_habits: {
     label: 'Ders Çalışma Alışkanlıkları',
+    prepost: true,
     questions: ['Kendi programımı hazırlarım','Programıma göre hareket ederim','Düzenli çalışırım','Tüm konulara hazırlanırım','Özel derslere katılırım','Rahatsız yerde okurum','Ev işleri yüzünden çalışamam','Önemli noktaları not alırım','Sözlük kullanırım','Yeni kelimelere dikkat ederim','Sınıfta detaylı not tutarım','Şüpheli noktaları sorarım','Zorlukları hemen çözerim','Önemli noktaları kaçırırım','Yardımcı kitapları okurum','Altını çizerim','Zorlandığım derse dikkat ederim','Zayıf konuya zaman ayırırım','Zor derslere öncelik veririm','Aynı konuyu uzun süre okurum','Sadece ilgimi çekeni çalışırım','Konsantre çalışırım','Hiç çalışmadığımı hissederim','Zihnim başka yerlere kayar','Okuduğumu hatırlamıyorum','Sınavda önce düşünürüm','Sınav zamanında gerginleşirim','Gece geç saate kadar çalışırım','Sınav zamanında notları okurum','Sınav zamanında tavsiyeler alırım','Önceki sınav sorularını hazırlamam','Anladıktan sonra ezberlerim','Arkadaşlarımla tartışırım','Yatarak okurum','Sesli okurum','Konuları karşılaştırırım','Derinlemesine düşünürüm','Yeni dersten önce gözden geçiririm','Paragraftan sonra tekrar ederim','Boş zamanlarda okurum','Kütüphane kitaplarını kullanırım','Okuldaki materyalleri okurum'],
   },
   procrastination: {
     label: 'Akademik Erteleme Ölçeği',
+    prepost: true,
     questions: ['İşleri gereksiz yere geciktiririm','Başlamayı ertelerim','Son dakikaya kadar beklerim','Zor kararları geciktiririm','Alışkanlık düzeltmeyi ertelerim','Yapmamak için bahane bulurum','Sıkıcı işlere de zaman ayırırım','İflah olmaz zaman avaresiyim','Zamanımı boşa harcıyorum','Zoru ertelemeye inanırım','Söz verir sonra ayak sürürüm','Eylem planıma uyarım','Nefret etsem de harekete geçemem','Önemli işleri vaktinde bitiririm','Önemini bilsem de harekete geçemem','Yarına bırakmak benim tarzım değil'],
   },
   stress: {
     label: 'Algılanan Stres Ölçeği (PSS)',
+    prepost: true,
     questions: ['Her şeyin yolunda olduğunu hissettim','İşlerin istediğim gibi gittiğini hissettim','Sorunlarla başa çıkma konusunda güvendim','Kızgınlıkları kontrol edebildim','Beklenmedik olay nedeniyle altüst oldum','Önemli şeyleri kontrol edemediğimi hissettim','Zorlukların üstesinden gelemeyeceğimi hissettim','Sinirli ve stresli hissettim','Her şeyle başa çıkamadığımı fark ettim','Kontrolüm dışındaki şeyler yüzünden öfkelendim'],
   },
 };
@@ -45,32 +54,11 @@ const formatDate = (ts) => {
   return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 };
 
-/** Log / Excel alanları: ISO string, Firestore Timestamp, { seconds }, Date, epoch ms */
-const toDateFromFlexible = (v) => {
-  if (v == null || v === '') return null;
-  if (typeof v === 'object' && typeof v.toDate === 'function') {
-    const d = v.toDate();
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-  if (typeof v === 'object' && typeof v.seconds === 'number') {
-    const d = new Date(v.seconds * 1000 + (v.nanoseconds || 0) / 1e6);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-
-const formatDateTimeTrOrDash = (v) => {
-  const d = toDateFromFlexible(v);
-  if (!d) return '—';
-  return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-};
-
 export default function AdminPage() {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
+  const [surveyUsers, setSurveyUsers] = useState([]);
 
   const isAdmin = ADMIN_UIDS.includes(currentUser?.uid);
 
@@ -99,8 +87,28 @@ export default function AdminPage() {
       Object.keys(SURVEYS).forEach(k => completedCounts[k] = 0);
       surveysSnap.docs.forEach(d => {
         const data = d.data();
-        Object.keys(SURVEYS).forEach(k => { if (data.completed?.[k]) completedCounts[k]++; });
+        Object.entries(SURVEYS).forEach(([k, s]) => {
+          if (s.prepost) {
+            if (data.completed?.[`${k}_pre`] || data.completed?.[`${k}_post`]) completedCounts[k]++;
+          } else {
+            if (data.completed?.[k]) completedCounts[k]++;
+          }
+        });
       });
+      // Anket dolduran kullanıcıları çek
+      const userMap2 = {};
+      usersSnap.docs.forEach(d => {
+        const data = d.data();
+        const isim = data.displayName?.trim() || data.email?.split('@')[0] || d.id.substring(0, 8);
+        userMap2[d.id] = { isim, email: data.email || '', uid: d.id };
+      });
+      const surveyUserList = surveysSnap.docs.map(d => {
+        const u = userMap2[d.id] || { isim: `(${d.id.substring(0, 8)})`, email: '', uid: d.id };
+        const completed = d.data().completed || {};
+        return { ...u, completedKeys: Object.keys(completed) };
+      });
+      setSurveyUsers(surveyUserList);
+
       setStats({
         totalUsers: usersSnap.size,
         totalSurveys: surveysSnap.size,
@@ -114,6 +122,8 @@ export default function AdminPage() {
   };
 
   // ── Anket Excel ──
+  // DÜZELTME: prepost:true olan anketler Firestore'a "id_pre" ve "id_post"
+  // anahtarlarıyla kaydedilir. Eskiden sadece "id" bakıldığı için tablo boş geliyordu.
   const downloadSurveyExcel = async (surveyId = null) => {
     setLoading(true);
     try {
@@ -121,43 +131,130 @@ export default function AdminPage() {
         getDocs(collection(db, 'surveys')),
         getDocs(collection(db, 'users')),
       ]);
+      // Debug — tarayıcı konsolunda kaç kayıt çekildiğini görmek için
+      console.log('[Admin] surveys koleksiyonu: ' + surveysSnap.size + ' kayıt');
+      console.log('[Admin] users koleksiyonu: ' + usersSnap.size + ' kayıt');
+      surveysSnap.docs.forEach(d => {
+        const completed = d.data().completed || {};
+        console.log('  survey uid=' + d.id + ' | completed keys:', Object.keys(completed));
+      });
+
       const userMap = {};
       usersSnap.docs.forEach(d => {
         const data = d.data();
-        userMap[d.id] = { isim: data.displayName || 'Bilinmiyor', email: data.email || '', fakulte: data.faculty || '', bolum: data.department || '' };
+        // displayName yoksa email prefix kullan, o da yoksa uid'den al
+        const isim = (data.displayName && data.displayName.trim())
+          ? data.displayName.trim()
+          : (data.email ? data.email.split('@')[0] : d.id.substring(0, 8));
+        userMap[d.id] = { isim, email: data.email || '', fakulte: data.faculty || '', bolum: data.department || '' };
+      });
+      // surveys koleksiyonundaki uid'ler userMap'te yoksa uid'yi key olarak ekle
+      surveysSnap.docs.forEach(d => {
+        if (!userMap[d.id]) {
+          userMap[d.id] = { isim: `Kullanıcı_${d.id.substring(0,8)}`, email: '', fakulte: '', bolum: '' };
+        }
       });
       const wb = XLSX.utils.book_new();
       const surveysToExport = surveyId ? { [surveyId]: SURVEYS[surveyId] } : SURVEYS;
+
       for (const [id, survey] of Object.entries(surveysToExport)) {
-        const rows = [['No', 'İsim', 'Email', 'Fakülte', 'Bölüm', ...survey.questions.map((q, i) => `S${i + 1}: ${q}`)]];
-        let rowNo = 1;
-        surveysSnap.docs.forEach(doc => {
-          const data = doc.data();
-          if (!data[id] || !data.completed?.[id]) return;
-          const user = userMap[doc.id] || { isim: doc.id, email: '', fakulte: '', bolum: '' };
-          const row = [rowNo++, user.isim, user.email, user.fakulte, user.bolum];
-          for (let i = 0; i < survey.questions.length; i++) row.push(data[id][i] ?? '');
-          rows.push(row);
-        });
-        if (rows.length === 1) rows.push(['', 'Henüz yanıt yok']);
-        const ws = XLSX.utils.aoa_to_sheet(rows);
-        ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 25 }, { wch: 20 }, { wch: 20 }, ...survey.questions.map(() => ({ wch: 8 }))];
-        XLSX.utils.book_append_sheet(wb, ws, survey.label.substring(0, 31));
+        // prepost:true → iki ayrı sheet (_pre ve _post), false → tek sheet
+        const variants = survey.prepost
+          ? [{ key: `${id}_pre`, label: `${survey.label} (Ön Test)` }, { key: `${id}_post`, label: `${survey.label} (Son Test)` }]
+          : [{ key: id, label: survey.label }];
+
+        for (const { key, label } of variants) {
+          const rows = [['No', 'İsim', 'Email', 'Fakülte', 'Bölüm', ...survey.questions.map((q, i) => `S${i + 1}: ${q}`)]];
+          let rowNo = 1;
+          surveysSnap.docs.forEach(doc => {
+            const data = doc.data();
+            // Hem yeni anahtar (key) hem de tamamlandı bayrağını kontrol et
+            if (!data[key] || !data.completed?.[key]) return;
+            const user = userMap[doc.id] || { isim: `Kullanıcı (${doc.id.substring(0, 8)})`, email: '', fakulte: '', bolum: '' };
+            const row = [rowNo++, user.isim, user.email, user.fakulte, user.bolum];
+            for (let i = 0; i < survey.questions.length; i++) row.push(data[key][i] ?? '');
+            rows.push(row);
+          });
+          if (rows.length === 1) rows.push(['', 'Henüz yanıt yok']);
+          const ws = XLSX.utils.aoa_to_sheet(rows);
+          ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 25 }, { wch: 20 }, { wch: 20 }, ...survey.questions.map(() => ({ wch: 8 }))];
+          XLSX.utils.book_append_sheet(wb, ws, label.substring(0, 31));
+        }
       }
+
       if (!surveyId) {
-        const [usSnap, survSnap] = [await getDocs(collection(db, 'users')), await getDocs(collection(db, 'surveys'))];
-        const summaryRows = [['Ölçek', 'Yanıt Sayısı']];
+        const summaryRows = [['Ölçek / Aşama', 'Yanıt Sayısı']];
         Object.entries(SURVEYS).forEach(([id, s]) => {
-          let count = 0;
-          survSnap.docs.forEach(d => { if (d.data().completed?.[id]) count++; });
-          summaryRows.push([s.label, count]);
+          if (s.prepost) {
+            let preCount = 0, postCount = 0;
+            surveysSnap.docs.forEach(d => {
+              if (d.data().completed?.[`${id}_pre`]) preCount++;
+              if (d.data().completed?.[`${id}_post`]) postCount++;
+            });
+            summaryRows.push([`${s.label} — Ön Test`, preCount]);
+            summaryRows.push([`${s.label} — Son Test`, postCount]);
+          } else {
+            let count = 0;
+            surveysSnap.docs.forEach(d => { if (d.data().completed?.[id]) count++; });
+            summaryRows.push([s.label, count]);
+          }
         });
-        summaryRows.push([''], ['Toplam Kullanıcı', usSnap.size], ['İndirme Tarihi', new Date().toLocaleDateString('tr-TR')]);
+        summaryRows.push([''], ['Toplam Kullanıcı', usersSnap.size], ['İndirme Tarihi', new Date().toLocaleDateString('tr-TR')]);
         const ws = XLSX.utils.aoa_to_sheet(summaryRows);
-        ws['!cols'] = [{ wch: 35 }, { wch: 15 }];
+        ws['!cols'] = [{ wch: 40 }, { wch: 15 }];
         XLSX.utils.book_append_sheet(wb, ws, 'Özet');
       }
+
       XLSX.writeFile(wb, surveyId ? `${SURVEYS[surveyId].label}_${new Date().toISOString().split('T')[0]}.xlsx` : `anket_sonuclari_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  // ── Anonimleştirilmiş Anket Excel ──
+  const downloadSurveyExcelAnon = async (surveyId = null) => {
+    setLoading(true);
+    try {
+      const [surveysSnap, usersSnap] = await Promise.all([
+        getDocs(collection(db, 'surveys')),
+        getDocs(collection(db, 'users')),
+      ]);
+      const userMap = {};
+      usersSnap.docs.forEach(d => { userMap[d.id] = d.data(); });
+
+      // Her kullanıcıya anonim ID ver
+      const anonMap = {};
+      let anonCounter = 1;
+      surveysSnap.docs.forEach(d => {
+        anonMap[d.id] = `Katilimci_${String(anonCounter++).padStart(3, '0')}`;
+      });
+
+      const wb = XLSX.utils.book_new();
+      const surveysToExport = surveyId ? { [surveyId]: SURVEYS[surveyId] } : SURVEYS;
+
+      for (const [id, survey] of Object.entries(surveysToExport)) {
+        const variants = survey.prepost
+          ? [{ key: `${id}_pre`, label: `${survey.label} (Ön Test)` }, { key: `${id}_post`, label: `${survey.label} (Son Test)` }]
+          : [{ key: id, label: survey.label }];
+        for (const { key, label } of variants) {
+          const rows = [['No', 'Katılımcı_ID', 'Fakülte', 'Bölüm', ...survey.questions.map((q, i) => `S${i + 1}: ${q}`)]];
+          let rowNo = 1;
+          surveysSnap.docs.forEach(doc => {
+            const data = doc.data();
+            if (!data[key] || !data.completed?.[key]) return;
+            const uData = userMap[doc.id] || {};
+            const row = [rowNo++, anonMap[doc.id], uData.faculty || '', uData.department || ''];
+            for (let i = 0; i < survey.questions.length; i++) row.push(data[key][i] ?? '');
+            rows.push(row);
+          });
+          if (rows.length === 1) rows.push(['', 'Henüz yanıt yok']);
+          const ws = XLSX.utils.aoa_to_sheet(rows);
+          ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, ...survey.questions.map(() => ({ wch: 8 }))];
+          XLSX.utils.book_append_sheet(wb, ws, label.substring(0, 31));
+        }
+      }
+      XLSX.writeFile(wb, surveyId
+        ? `${SURVEYS[surveyId].label}_anonim_${new Date().toISOString().split('T')[0]}.xlsx`
+        : `anket_sonuclari_anonim_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -372,24 +469,8 @@ export default function AdminPage() {
         .map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
 
-      sortedLogs.forEach((l) => {
-        if (l.islemTipi === 'Rozet_Kazanildi') return;
-
-        const sess = l.sessionId ? sessionById[l.sessionId] : null;
-        const baslangicKaynak =
-          (l.baslangicZamani != null && String(l.baslangicZamani).trim() !== '' ? l.baslangicZamani : null)
-          ?? sess?.startedAt
-          ?? sess?.createdAt
-          ?? null;
-        const bitisKaynak =
-          (l.bitisZamani != null && String(l.bitisZamani).trim() !== '' ? l.bitisZamani : null)
-          ?? sess?.endedAt
-          ?? null;
-        const toplamSureVal =
-          l.toplamSure != null && l.toplamSure !== ''
-            ? l.toplamSure
-            : (sess?.durationMinutes != null ? sess.durationMinutes : '—');
-
+      sortedLogs.forEach((l, i) => {
+        const bitisZamani = l.bitisZamani ? new Date(l.bitisZamani).toLocaleString('tr-TR') : '—';
         ek8Rows.push([
           l.sessionId || '—',
           l.kullaniciId || '',
@@ -398,9 +479,9 @@ export default function AdminPage() {
           l.eslesenKisiId ? (userMap[l.eslesenKisiId]?.displayName || l.eslesenKisiId) : '—',
           l.islemTipi || '',
           l.calismaKonusu || '—',
-          formatDateTimeTrOrDash(baslangicKaynak),
-          formatDateTimeTrOrDash(bitisKaynak),
-          toplamSureVal,
+          formatDate(l.zaman),
+          bitisZamani,
+          l.toplamSure != null ? l.toplamSure : '—',
           resolveBulusmaYeri(l),
         ]);
       });
@@ -437,6 +518,92 @@ export default function AdminPage() {
       XLSX.utils.book_append_sheet(wb, wsSummary, 'Özet');
 
       XLSX.writeFile(wb, `kullanim_verileri_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  // ── Anonimleştirilmiş Kullanım Verileri ──
+  const downloadUsageExcelAnon = async () => {
+    setLoading(true);
+    try {
+      const safeGet = async (col) => { try { return await getDocs(collection(db, col)); } catch { return { docs: [] }; } };
+      const [usersSnap, sessionsSnap, matchesSnap, reviewsSnap, logsAnonSnap] = await Promise.all([
+        safeGet('users'), safeGet('sessions'), safeGet('matches'), safeGet('reviews'), safeGet('logs'),
+      ]);
+
+      // Anonim ID map
+      const anonMap = {};
+      let n = 1;
+      usersSnap.docs.forEach(d => { anonMap[d.id] = `P${String(n++).padStart(3,'0')}`; });
+      const anonId = (uid) => anonMap[uid] || `P_${uid.substring(0,6)}`;
+      const userFak = {};
+      usersSnap.docs.forEach(d => { userFak[d.id] = { f: d.data().faculty||'', b: d.data().department||'' }; });
+
+      const wb = XLSX.utils.book_new();
+
+      // Kullanıcılar
+      const uRows = [['No','Katilimci_ID','Fakülte','Bölüm','Kayıt Tarihi','Son Görülme']];
+      usersSnap.docs.forEach((d,i) => {
+        const u = d.data();
+        uRows.push([i+1, anonId(d.id), u.faculty||'', u.department||'', formatDate(u.createdAt), formatDate(u.lastSeen)]);
+      });
+      const ws1 = XLSX.utils.aoa_to_sheet(uRows);
+      ws1['!cols'] = [{wch:5},{wch:14},{wch:22},{wch:22},{wch:18},{wch:18}];
+      XLSX.utils.book_append_sheet(wb, ws1, 'Kullanıcılar');
+
+      // Oturumlar
+      const sRows = [['No','Katilimci_ID','Eslesen_ID','Ders','Tür','Başlangıç','Bitiş','Süre_dk','Odak','Verimlilik']];
+      sessionsSnap.docs.forEach((d,i) => {
+        const s = d.data();
+        if (s.status !== 'completed') return;
+        const uid = s.participants?.[0]||'';
+        sRows.push([i+1, anonId(uid), s.partnerId?anonId(s.partnerId):'—', s.subject||'Genel', s.coSessionId?'Eş Zamanlı':'Bireysel',
+          formatDate(s.startedAt||s.createdAt), formatDate(s.endedAt), s.durationMinutes||0, s.rating?.focusLevel||'', s.rating?.productivity||'']);
+      });
+      const ws2 = XLSX.utils.aoa_to_sheet(sRows);
+      ws2['!cols'] = [{wch:5},{wch:14},{wch:14},{wch:18},{wch:14},{wch:18},{wch:18},{wch:10},{wch:8},{wch:10}];
+      XLSX.utils.book_append_sheet(wb, ws2, 'Oturumlar');
+
+      // Eşleşmeler
+      const mRows = [['No','Kullanıcı_1','Kullanıcı_2','Durum','Uyum_Skoru','Tarih']];
+      matchesSnap.docs.forEach((d,i) => {
+        const m = d.data();
+        mRows.push([i+1, anonId(m.users?.[0]), anonId(m.users?.[1]),
+          m.status==='active'?'Aktif':m.status==='pending'?'Bekliyor':'Sonlandı', m.compatibilityScore||'', formatDate(m.createdAt)]);
+      });
+      const ws3 = XLSX.utils.aoa_to_sheet(mRows);
+      ws3['!cols'] = [{wch:5},{wch:14},{wch:14},{wch:12},{wch:12},{wch:18}];
+      XLSX.utils.book_append_sheet(wb, ws3, 'Eşleşmeler');
+
+      // ── Uygulama Logları (Anonim, sadece oturum kayıtları — rozet olayları hariç) ──
+      const lRows = [['No','Katilimci_ID','Eslesen_ID','Islem_Tipi','Calisma_Konusu','Baslangic_Zamani','Bitis_Zamani','Toplam_Sure_dk','Oturum_Turu']];
+      const sortedAnonLogs = logsAnonSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(l => {
+          const tip = (l.islemTipi || '').toLowerCase();
+          return !tip.includes('rozet') && !tip.includes('badge') && tip !== '';
+        })
+        .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
+      sortedAnonLogs.forEach((l, i) => {
+        const bitisZamani = l.bitisZamani ? new Date(l.bitisZamani).toLocaleString('tr-TR') : '—';
+        const sessTur = l.coSessionId ? 'Eş Zamanlı' : (l.sessionId ? 'Bireysel' : '—');
+        lRows.push([
+          i + 1,
+          anonId(l.kullaniciId),
+          l.eslesenKisiId ? anonId(l.eslesenKisiId) : '—',
+          l.islemTipi || '',
+          l.calismaKonusu || '—',
+          formatDate(l.zaman),
+          bitisZamani,
+          l.toplamSure != null ? l.toplamSure : '—',
+          sessTur,
+        ]);
+      });
+      const wsLogsAnon = XLSX.utils.aoa_to_sheet(lRows);
+      wsLogsAnon['!cols'] = [{wch:5},{wch:14},{wch:14},{wch:32},{wch:22},{wch:20},{wch:20},{wch:14},{wch:14}];
+      XLSX.utils.book_append_sheet(wb, wsLogsAnon, 'Uygulama Logları');
+
+      XLSX.writeFile(wb, `kullanim_verileri_anonim_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -481,12 +648,18 @@ export default function AdminPage() {
           <p className="text-xs mb-4" style={{ color: 'var(--mist)' }}>
             Kullanıcılar, oturumlar, eşleşmeler ve yorumlar — 5 sheet'li tek Excel dosyası
           </p>
+          <div className="flex gap-2">
           <button onClick={downloadUsageExcel} disabled={loading}
-            className="btn-primary w-full py-3 flex items-center justify-center gap-2">
+            className="btn-primary flex-1 py-3 flex items-center justify-center gap-2">
             {loading
               ? <span className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" />
-              : <><Download size={16} /> Kullanım Verilerini İndir (.xlsx)</>}
+              : <><Download size={16} /> İndir (İsimli)</>}
           </button>
+          <button onClick={() => downloadUsageExcelAnon()} disabled={loading}
+            className="btn-outline flex-1 py-3 flex items-center justify-center gap-2">
+            <Download size={16} /> İndir (Anonim)
+          </button>
+        </div>
         </div>
 
         {/* Anket verileri */}
@@ -495,12 +668,18 @@ export default function AdminPage() {
           <p className="text-xs mb-4" style={{ color: 'var(--mist)' }}>
             Her ölçek ayrı sheet — soru metinleri başlık satırında
           </p>
-          <button onClick={() => downloadSurveyExcel()} disabled={loading}
-            className="btn-primary w-full py-3 flex items-center justify-center gap-2 mb-4">
-            {loading
-              ? <span className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" />
-              : <><Download size={16} /> Tüm Ölçekleri İndir (.xlsx)</>}
-          </button>
+          <div className="flex gap-2 mb-4">
+            <button onClick={() => downloadSurveyExcel()} disabled={loading}
+              className="btn-primary flex-1 py-3 flex items-center justify-center gap-2">
+              {loading
+                ? <span className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" />
+                : <><Download size={16} /> İndir (İsimli)</>}
+            </button>
+            <button onClick={() => downloadSurveyExcelAnon()} disabled={loading}
+              className="btn-outline flex-1 py-3 flex items-center justify-center gap-2">
+              <Download size={16} /> İndir (Anonim)
+            </button>
+          </div>
           <div className="flex flex-col gap-2">
             {Object.entries(SURVEYS).map(([id, s]) => (
               <div key={id} className="flex items-center justify-between p-3 rounded-xl"
@@ -519,6 +698,31 @@ export default function AdminPage() {
             ))}
           </div>
         </div>
+
+        {/* Anket Katılımcıları Listesi */}
+        {surveyUsers.length > 0 && (
+          <div className="glass-card p-5">
+            <p className="section-label mb-1">Anket Katılımcıları</p>
+            <p className="text-xs mb-4" style={{ color: 'var(--mist)' }}>
+              {surveyUsers.length} kullanıcı kayıtlı — İstatistik yenilendikten sonra güncellenir
+            </p>
+            <div className="flex flex-col gap-2">
+              {surveyUsers.map((u, i) => (
+                <div key={u.uid} className="flex items-center justify-between p-3 rounded-xl"
+                  style={{ background: 'rgba(245,237,216,0.03)', border: '1px solid rgba(245,237,216,0.06)' }}>
+                  <div>
+                    <p className="text-sm font-medium text-cream">{i + 1}. {u.isim}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--mist)' }}>{u.email}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs" style={{ color: 'var(--amber)' }}>{u.completedKeys.length} ölçek</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--mist)' }}>{u.completedKeys.join(', ') || '—'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
     </AppLayout>
