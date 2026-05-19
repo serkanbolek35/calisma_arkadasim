@@ -45,6 +45,28 @@ const formatDate = (ts) => {
   return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 };
 
+/** Log / Excel alanları: ISO string, Firestore Timestamp, { seconds }, Date, epoch ms */
+const toDateFromFlexible = (v) => {
+  if (v == null || v === '') return null;
+  if (typeof v === 'object' && typeof v.toDate === 'function') {
+    const d = v.toDate();
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof v === 'object' && typeof v.seconds === 'number') {
+    const d = new Date(v.seconds * 1000 + (v.nanoseconds || 0) / 1e6);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const formatDateTimeTrOrDash = (v) => {
+  const d = toDateFromFlexible(v);
+  if (!d) return '—';
+  return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+};
+
 export default function AdminPage() {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -350,8 +372,24 @@ export default function AdminPage() {
         .map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
 
-      sortedLogs.forEach((l, i) => {
-        const bitisZamani = l.bitisZamani ? new Date(l.bitisZamani).toLocaleString('tr-TR') : '—';
+      sortedLogs.forEach((l) => {
+        if (l.islemTipi === 'Rozet_Kazanildi') return;
+
+        const sess = l.sessionId ? sessionById[l.sessionId] : null;
+        const baslangicKaynak =
+          (l.baslangicZamani != null && String(l.baslangicZamani).trim() !== '' ? l.baslangicZamani : null)
+          ?? sess?.startedAt
+          ?? sess?.createdAt
+          ?? null;
+        const bitisKaynak =
+          (l.bitisZamani != null && String(l.bitisZamani).trim() !== '' ? l.bitisZamani : null)
+          ?? sess?.endedAt
+          ?? null;
+        const toplamSureVal =
+          l.toplamSure != null && l.toplamSure !== ''
+            ? l.toplamSure
+            : (sess?.durationMinutes != null ? sess.durationMinutes : '—');
+
         ek8Rows.push([
           l.sessionId || '—',
           l.kullaniciId || '',
@@ -360,9 +398,9 @@ export default function AdminPage() {
           l.eslesenKisiId ? (userMap[l.eslesenKisiId]?.displayName || l.eslesenKisiId) : '—',
           l.islemTipi || '',
           l.calismaKonusu || '—',
-          formatDate(l.zaman),
-          bitisZamani,
-          l.toplamSure != null ? l.toplamSure : '—',
+          formatDateTimeTrOrDash(baslangicKaynak),
+          formatDateTimeTrOrDash(bitisKaynak),
+          toplamSureVal,
           resolveBulusmaYeri(l),
         ]);
       });

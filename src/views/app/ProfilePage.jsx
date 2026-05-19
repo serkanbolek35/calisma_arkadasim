@@ -7,7 +7,6 @@ import { getUser } from '../../services/user.service';
 import { getUserSessions } from '../../services/session.service';
 import { getUserReviews, submitReview, hasReviewedUser } from '../../services/review.service';
 import { calcBadges } from '../../utils/badges';
-import { writeLog } from '../../services/session.service';
 import { createStudyRequest } from '../../services/studyRequest.service';
 
 const Stars = ({ value, max = 5, size = 14, interactive = false, onChange }) => (
@@ -112,25 +111,6 @@ export default function ProfilePage() {
     if (!profile) return [];
     return calcBadges(stats, reviewStats);
   }, [profile, stats, reviewStats]);
-
-  const earnedBadgeIds = useMemo(
-    () => [...badges].map(b => b.id).sort().join(','),
-    [badges],
-  );
-
-  // Erken return'lerden önce — önceki sürümde burası return'lerden sonraydı (hook sırası bozuluyordu)
-  useEffect(() => {
-    if (loading || !profile || !currentUser?.uid) return;
-    if (targetUid !== currentUser.uid) return;
-    if (!earnedBadgeIds) return;
-    badges.forEach(b => {
-      writeLog({
-        kullaniciId: currentUser.uid,
-        islemTipi: 'Rozet_Kazanildi',
-        calismaKonusu: b.label,
-      }).catch(() => {});
-    });
-  }, [loading, profile, currentUser?.uid, targetUid, earnedBadgeIds, badges]);
 
   const handleSubmitReview = async () => {
     if (!canReview) return;
