@@ -51,7 +51,67 @@ const SURVEYS = {
 const formatDate = (ts) => {
   if (!ts) return '';
   const d = ts.toDate?.() ?? new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+};
+
+const isBadgeLog = (log) => {
+  const tip = (log.islemTipi || '').toLowerCase();
+  return tip.includes('rozet') || tip.includes('badge');
+};
+
+const toDateValue = (value) => {
+  if (!value) return null;
+  const d = value.toDate?.() ?? new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const resolveLogTimestamps = (log, sessionById = {}) => {
+  const sess = log.sessionId ? sessionById[log.sessionId] : null;
+  const baslangic = toDateValue(log.baslangicZamani)
+    ?? toDateValue(sess?.startedAt)
+    ?? toDateValue(sess?.createdAt)
+    ?? toDateValue(log.zaman);
+
+  let bitis = toDateValue(log.bitisZamani) ?? toDateValue(sess?.endedAt);
+  if (!bitis && baslangic && log.toplamSure != null) {
+    bitis = new Date(baslangic.getTime() + log.toplamSure * 60 * 1000);
+  }
+  if (!bitis) bitis = toDateValue(log.zaman);
+
+  return {
+    baslangic: formatDate(baslangic),
+    bitis: formatDate(bitis),
+  };
+};
+
+const resolveLogSessionType = (log, sessionById = {}) => {
+  if (log.coSessionId) return 'Eş Zamanlı';
+  const sess = log.sessionId ? sessionById[log.sessionId] : null;
+  if (sess?.coSessionId) return 'Eş Zamanlı';
+  if (log.sessionId || sess) return 'Bireysel';
+  return '—';
+};
+
+const buildSessionById = (sessionsSnap) => {
+  const sessionById = {};
+  sessionsSnap.docs.forEach((d) => { sessionById[d.id] = d.data(); });
+  return sessionById;
+};
+
+const createAnonIdMapper = (usersSnap) => {
+  const anonMap = {};
+  let n = 1;
+  usersSnap.docs.forEach((d) => {
+    anonMap[d.id] = `P${String(n++).padStart(3, '0')}`;
+  });
+  return (uid) => {
+    if (!uid) return '—';
+    if (!anonMap[uid]) {
+      anonMap[uid] = `P${String(n++).padStart(3, '0')}`;
+    }
+    return anonMap[uid];
+  };
 };
 
 export default function AdminPage() {
@@ -442,8 +502,7 @@ export default function AdminPage() {
         'Oturum_ID', 'Kullanici_ID', 'Kullanici_Adi', 'Eslesen_Kisi_ID', 'Eslesen_Kisi_Adi',
         'Islem_Tipi', 'Calisma_Konusu', 'Baslangic_Zamani', 'Bitis_Zamani', 'Toplam_Sure_dk', 'Bulusma_Yeri'
       ]];
-      const sessionById = {};
-      sessionsSnap.docs.forEach((d) => { sessionById[d.id] = d.data(); });
+      const sessionById = buildSessionById(sessionsSnap);
       const coSessionById = {};
       coSessionsSnap.docs.forEach((d) => { coSessionById[d.id] = d.data(); });
 
@@ -467,10 +526,11 @@ export default function AdminPage() {
       // Logları zamana göre sırala
       const sortedLogs = logsSnap.docs
         .map(d => ({ id: d.id, ...d.data() }))
+        .filter(l => !isBadgeLog(l))
         .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
 
-      sortedLogs.forEach((l, i) => {
-        const bitisZamani = l.bitisZamani ? new Date(l.bitisZamani).toLocaleString('tr-TR') : '—';
+      sortedLogs.forEach((l) => {
+        const { baslangic, bitis } = resolveLogTimestamps(l, sessionById);
         ek8Rows.push([
           l.sessionId || '—',
           l.kullaniciId || '',
@@ -479,8 +539,8 @@ export default function AdminPage() {
           l.eslesenKisiId ? (userMap[l.eslesenKisiId]?.displayName || l.eslesenKisiId) : '—',
           l.islemTipi || '',
           l.calismaKonusu || '—',
-          formatDate(l.zaman),
-          bitisZamani,
+          baslangic,
+          bitis,
           l.toplamSure != null ? l.toplamSure : '—',
           resolveBulusmaYeri(l),
         ]);
@@ -531,11 +591,8 @@ export default function AdminPage() {
         safeGet('users'), safeGet('sessions'), safeGet('matches'), safeGet('reviews'), safeGet('logs'),
       ]);
 
-      // Anonim ID map
-      const anonMap = {};
-      let n = 1;
-      usersSnap.docs.forEach(d => { anonMap[d.id] = `P${String(n++).padStart(3,'0')}`; });
-      const anonId = (uid) => anonMap[uid] || `P_${uid.substring(0,6)}`;
+      const anonId = createAnonIdMapper(usersSnap);
+      const sessionById = buildSessionById(sessionsSnap);
       const userFak = {};
       usersSnap.docs.forEach(d => { userFak[d.id] = { f: d.data().faculty||'', b: d.data().department||'' }; });
 
@@ -579,24 +636,20 @@ export default function AdminPage() {
       const lRows = [['No','Katilimci_ID','Eslesen_ID','Islem_Tipi','Calisma_Konusu','Baslangic_Zamani','Bitis_Zamani','Toplam_Sure_dk','Oturum_Turu']];
       const sortedAnonLogs = logsAnonSnap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(l => {
-          const tip = (l.islemTipi || '').toLowerCase();
-          return !tip.includes('rozet') && !tip.includes('badge') && tip !== '';
-        })
+        .filter(l => !isBadgeLog(l) && (l.islemTipi || '').trim() !== '')
         .sort((a, b) => (b.zaman?.toMillis?.() ?? 0) - (a.zaman?.toMillis?.() ?? 0));
       sortedAnonLogs.forEach((l, i) => {
-        const bitisZamani = l.bitisZamani ? new Date(l.bitisZamani).toLocaleString('tr-TR') : '—';
-        const sessTur = l.coSessionId ? 'Eş Zamanlı' : (l.sessionId ? 'Bireysel' : '—');
+        const { baslangic, bitis } = resolveLogTimestamps(l, sessionById);
         lRows.push([
           i + 1,
           anonId(l.kullaniciId),
           l.eslesenKisiId ? anonId(l.eslesenKisiId) : '—',
           l.islemTipi || '',
           l.calismaKonusu || '—',
-          formatDate(l.zaman),
-          bitisZamani,
+          baslangic,
+          bitis,
           l.toplamSure != null ? l.toplamSure : '—',
-          sessTur,
+          resolveLogSessionType(l, sessionById),
         ]);
       });
       const wsLogsAnon = XLSX.utils.aoa_to_sheet(lRows);

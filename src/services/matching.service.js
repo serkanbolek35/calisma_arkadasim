@@ -82,10 +82,13 @@ export const respondToMatch = async (matchId, accept, responderId = '', responde
 
   // Log: Eşleşme onaylandı
   if (accept && matchData?.users) {
+    const now = new Date().toISOString();
     await writeLog({
       kullaniciId: responderId,
       eslesenKisiId: matchData.initiatedBy,
       islemTipi: 'Eslesme_Onaylandi',
+      baslangicZamani: now,
+      bitisZamani: now,
     });
   }
 

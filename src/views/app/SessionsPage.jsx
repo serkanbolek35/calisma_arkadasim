@@ -509,9 +509,11 @@ export default function SessionsPage() {
             eslesenKisiId: partnerId,
             islemTipi: 'Eslesme_Oturum_Tamamlandi',
             calismaKonusu: subject,
+            baslangicZamani: activeData.startTime?.toISOString() ?? null,
             toplamSure: mins,
             bitisZamani: new Date().toISOString(),
             bulusmaYeri: cs.bulusmaYeri ?? null,
+            coSessionId,
           });
           setCompletedId(sid);
         }
@@ -558,9 +560,11 @@ export default function SessionsPage() {
       eslesenKisiId: activeSession.partner?.uid || null,
       islemTipi: activeSession.partner ? 'Eslesme_Oturum_Tamamlandi' : 'Bireysel_Oturum_Tamamlandi',
       calismaKonusu: activeSession.subject,
+      baslangicZamani: activeSession.startTime?.toISOString() ?? null,
       toplamSure: mins,
       bitisZamani: new Date().toISOString(),
       bulusmaYeri: activeSession.bulusmaYeri || null,
+      coSessionId: activeSession.coSessionId || null,
     });
 
     if (activeSession.coSessionId) {

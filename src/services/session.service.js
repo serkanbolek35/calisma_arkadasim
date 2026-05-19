@@ -27,7 +27,7 @@ export const enrichSessionsForViewer = async (viewerUid, sessions) =>
 
 // ── Uygulama Log Kaydı ────────────────────────────────────────
 // Her önemli eylem için logs koleksiyonuna kayıt yazar
-export const writeLog = async ({ sessionId, kullaniciId, eslesenKisiId, islemTipi, calismaKonusu, bitisZamani, toplamSure, bulusmaYeri }) => {
+export const writeLog = async ({ sessionId, kullaniciId, eslesenKisiId, islemTipi, calismaKonusu, baslangicZamani, bitisZamani, toplamSure, bulusmaYeri, coSessionId }) => {
   try {
     await addDoc(collection(db, 'logs'), {
       sessionId: sessionId || null,
@@ -35,10 +35,12 @@ export const writeLog = async ({ sessionId, kullaniciId, eslesenKisiId, islemTip
       eslesenKisiId: eslesenKisiId || null,
       islemTipi,
       calismaKonusu: calismaKonusu || null,
-      bitisZamani: bitisZamani || null,   // ISO string
-      toplamSure: toplamSure ?? null,     // dakika (sayı)
+      baslangicZamani: baslangicZamani || null,
+      bitisZamani: bitisZamani || null,
+      toplamSure: toplamSure ?? null,
       bulusmaYeri: bulusmaYeri || null,
-      zaman: serverTimestamp(),           // log yazıldığı an
+      coSessionId: coSessionId || null,
+      zaman: serverTimestamp(),
     });
   } catch (e) { console.error('writeLog error:', e); }
 };
